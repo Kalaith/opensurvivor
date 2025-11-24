@@ -2,6 +2,8 @@
 
 Open Survivor is an early-stage top-down survival shooter built with [Python Arcade](https://api.arcade.academy/). It currently includes a minimal engine, player character, and systems for spawning, combat, and leveling, providing a foundation to iterate on the game design captured in `GDD.md`.
 
+![Gameplay Screenshot](screenshot.png)
+
 ## Project structure
 - `game/` – Python package containing the game engine, content, and systems
   - `main.py` – entry point that creates the window and starts the engine
