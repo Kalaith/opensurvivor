@@ -9,13 +9,19 @@ class Engine(arcade.Window):
     """
     Core game engine that handles the main loop, event processing, and rendering.
     """
-    def __init__(self, width: int = 1280, height: int = 720, title: str = "Open Survivor"):
+    def __init__(
+        self,
+        width: int = 1280,
+        height: int = 720,
+        title: str = "Open Survivor",
+        map_definition: MapDefinition | None = None,
+    ):
         super().__init__(width, height, title)
 
         self.input_handler = InputHandler()
 
         # Map definition and obstacles
-        self.map = MapDefinition(width=width, height=height)
+        self.map = map_definition or MapDefinition(width=width, height=height)
 
         # Sprite lists
         self.all_sprites = arcade.SpriteList()
@@ -46,24 +52,9 @@ class Engine(arcade.Window):
         """Render the game."""
         self.clear()
 
-        # Draw map background
-        arcade.draw_lrtb_rectangle_filled(
-            0,
-            self.map.width,
-            self.map.height,
-            0,
-            color=(25, 25, 40),
-        )
+        self._draw_map_background()
 
-        # Draw a subtle grid for spatial reference
-        grid_spacing = 128
-        grid_color = (40, 40, 60)
-        for x in range(0, int(self.map.width) + 1, grid_spacing):
-            arcade.draw_line(x, 0, x, self.map.height, grid_color, 1)
-        for y in range(0, int(self.map.height) + 1, grid_spacing):
-            arcade.draw_line(0, y, self.map.width, y, grid_color, 1)
-
-        # Draw obstacles
+        # Draw obstacles inside the map bounds
         self.obstacles.draw()
         self.all_sprites.draw()
 
@@ -131,6 +122,10 @@ class Engine(arcade.Window):
             sprite.change_x = 0
             sprite.change_y = 0
 
+        self._clamp_to_map(sprite)
+
+    def _clamp_to_map(self, sprite: arcade.Sprite) -> None:
+        """Keep a sprite inside the map rectangle."""
         half_w = sprite.width / 2
         half_h = sprite.height / 2
         clamped_x = min(max(sprite.center_x, half_w), self.map.width - half_w)
@@ -141,3 +136,20 @@ class Engine(arcade.Window):
             sprite.center_y = clamped_y
             sprite.change_x = 0
             sprite.change_y = 0
+
+    def _draw_map_background(self) -> None:
+        """Render the arena area with a solid fill and grid."""
+        arcade.draw_lrtb_rectangle_filled(
+            0,
+            self.map.width,
+            self.map.height,
+            0,
+            color=self.map.background_color,
+        )
+
+        grid_spacing = self.map.grid_spacing
+        grid_color = self.map.grid_color
+        for x in range(0, int(self.map.width) + 1, grid_spacing):
+            arcade.draw_line(x, 0, x, self.map.height, grid_color, 1)
+        for y in range(0, int(self.map.height) + 1, grid_spacing):
+            arcade.draw_line(0, y, self.map.width, y, grid_color, 1)
