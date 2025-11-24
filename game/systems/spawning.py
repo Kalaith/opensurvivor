@@ -1,5 +1,5 @@
 import random
-from ..content.characters.enemy import Enemy
+from ..content.characters.enemy import Enemy, ArmoredEnemy, SplittingEnemy
 
 class SpawningSystem:
     def __init__(self, engine):
@@ -31,7 +31,12 @@ class SpawningSystem:
             x = self.engine.width + 50
             y = random.uniform(0, self.engine.height)
         
-        enemy = Enemy(x, y)
+        enemy_class = random.choices(
+            population=[Enemy, SplittingEnemy, ArmoredEnemy],
+            weights=[0.6, 0.25, 0.15],
+        )[0]
+
+        enemy = enemy_class(x, y)
         enemy.target = self.engine.player
         self.engine.enemies.append(enemy)
         self.engine.all_sprites.append(enemy)
