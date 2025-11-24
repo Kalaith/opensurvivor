@@ -253,13 +253,14 @@ class Engine(arcade.Window):
 
     def _draw_bar(self, x, y, width, height, ratio, fill_color, background_color, label):
         clamped_ratio = max(0.0, min(1.0, ratio))
-        arcade.draw_rectangle_filled(x, y, width, height, background_color)
+        # x, y are center coordinates. Convert to bottom-left for lbwh.
+        arcade.draw_lbwh_rectangle_filled(x - width / 2, y - height / 2, width, height, background_color)
 
         filled_width = width * clamped_ratio
         left = x - width / 2
         if filled_width > 0:
-            arcade.draw_rectangle_filled(
-                left + filled_width / 2, y, filled_width, height, fill_color
+            arcade.draw_lbwh_rectangle_filled(
+                left, y - height / 2, filled_width, height, fill_color
             )
 
         text = arcade.Text(label, left + 6, y - height / 2 + 2, arcade.color.WHITE, 12)

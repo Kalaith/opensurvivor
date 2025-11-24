@@ -15,7 +15,7 @@ class SoundManager:
         self.volume_config = {
             "master": 0.5,
             "sfx": {
-                "attack": 0.25,
+                "attack": 0.1,
                 "hit": 0.35,
                 "xp_collect": 0.25,
                 "level_up": 0.5,

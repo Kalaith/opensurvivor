@@ -23,7 +23,7 @@ class MapDefinition:
 
         if obstacle_data is None:
             obstacle_data = [
-                (width * 0.5, height * 0.5, 80, 80),
+                (width * 0.5, height * 0.3, 80, 80),
                 (width * 0.3, height * 0.6, 40, 140),
                 (width * 0.7, height * 0.35, 120, 40),
             ]

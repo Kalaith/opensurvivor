@@ -119,7 +119,9 @@ class SpawningSystem:
         enemy.health = int(enemy.health * self.elite_health_multiplier)
         enemy.speed *= self.elite_speed_multiplier
         if hasattr(enemy, "color"):
-            r, g, b = enemy.color
+            # Handle both 3-tuple (RGB) and 4-tuple (RGBA)
+            c = enemy.color
+            r, g, b = c[0], c[1], c[2]
             enemy.color = (min(255, int(r * 0.8)), min(255, int(g * 0.8)), min(255, int(b * 1.2)))
         enemy.is_elite = True
 

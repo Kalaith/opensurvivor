@@ -204,24 +204,24 @@ class LevelingSystem:
             panel_x, panel_y = width / 2, height / 2
             self.option_boxes = []
 
-            arcade.draw_rectangle_filled(
-                panel_x, panel_y, width, height, (10, 10, 25, 180)
+            arcade.draw_lbwh_rectangle_filled(
+                panel_x - width / 2, panel_y - height / 2, width, height, (10, 10, 25, 180)
             )
-            arcade.draw_rectangle_filled(
-                panel_x, panel_y, panel_width, panel_height, (25, 28, 45, 230)
+            arcade.draw_lbwh_rectangle_filled(
+                panel_x - panel_width / 2, panel_y - panel_height / 2, panel_width, panel_height, (25, 28, 45, 230)
             )
-            arcade.draw_rectangle_outline(
-                panel_x, panel_y, panel_width, panel_height, (120, 180, 255, 255), 4
+            arcade.draw_lbwh_rectangle_outline(
+                panel_x - panel_width / 2, panel_y - panel_height / 2, panel_width, panel_height, (120, 180, 255, 255), 4
             )
 
             header = arcade.Text(
-                "Level Up!", panel_x, panel_y + panel_height / 2 - 60, 0xE6F1FF, 34, anchor_x="center"
+                "Level Up!", panel_x, panel_y + panel_height / 2 - 60, (230, 241, 255), 34, anchor_x="center"
             )
             subheader = arcade.Text(
                 "Choose an upgrade to power up.",
                 panel_x,
                 panel_y + panel_height / 2 - 95,
-                0xC3D1FF,
+                (195, 209, 255),
                 18,
                 anchor_x="center",
             )
@@ -243,13 +243,13 @@ class LevelingSystem:
 
                 is_hovered = self._point_in_box(*self.last_mouse_pos, box)
                 bg_color = (50, 60, 90, 230) if is_hovered else (38, 44, 70, 210)
-                arcade.draw_lrtb_rectangle_filled(left, right, top, bottom, bg_color)
-                arcade.draw_lrtb_rectangle_outline(
-                    left, right, top, bottom, (150, 200, 255, 255), 2
+                arcade.draw_lrbt_rectangle_filled(left, right, bottom, top, bg_color)
+                arcade.draw_lbwh_rectangle_outline(
+                    left, bottom, right - left, top - bottom, (150, 200, 255, 255), 2
                 )
 
                 badge_text = arcade.Text(
-                    f"{i + 1}", left + 14, option_center_y, 0xFFFFFF, 16, anchor_y="center"
+                    f"{i + 1}", left + 14, option_center_y, (255, 255, 255), 16, anchor_y="center"
                 )
                 badge_radius = 18
                 arcade.draw_circle_filled(
@@ -261,7 +261,7 @@ class LevelingSystem:
                     f"{opt.icon} {opt.title}",
                     left + 46,
                     option_center_y + 28,
-                    0xFFFFFF,
+                    (255, 255, 255),
                     20,
                     bold=True,
                 )
@@ -269,14 +269,14 @@ class LevelingSystem:
                     opt.description,
                     left + 46,
                     option_center_y,
-                    0xCFE0FF,
+                    (207, 224, 255),
                     15,
                 )
                 tooltip = arcade.Text(
                     opt.tooltip or "Click or press number to select",
                     left + 46,
                     option_center_y - 24,
-                    0x9FB4E4,
+                    (159, 180, 228),
                     13,
                 )
 
@@ -288,7 +288,7 @@ class LevelingSystem:
                 "Click or press 1, 2, or 3 to select an upgrade",
                 panel_x,
                 panel_y - panel_height / 2 + 40,
-                0xE6F1FF,
+                (230, 241, 255),
                 16,
                 anchor_x="center",
             )
@@ -301,7 +301,7 @@ class LevelingSystem:
                 self.feedback_message,
                 width / 2,
                 height - 40,
-                0xD8F3DC,
+                (216, 243, 220),
                 18,
                 anchor_x="center",
                 bold=True,
