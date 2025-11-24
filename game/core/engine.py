@@ -120,6 +120,12 @@ class Engine(arcade.Window):
     def on_key_release(self, key, modifiers):
         self.input_handler.on_key_release(key, modifiers)
 
+    def on_mouse_motion(self, x, y, dx, dy):
+        self.leveling_system.handle_mouse_motion(x, y, dx, dy)
+
+    def on_mouse_press(self, x, y, button, modifiers):
+        if self.leveling_system.handle_mouse_press(x, y, button, modifiers):
+            return
     def _apply_bounds_and_collisions(self, sprite: arcade.Sprite, previous_pos):
         """Clamp sprites to the map bounds and prevent passing through obstacles."""
         if previous_pos is None:
