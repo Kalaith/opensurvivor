@@ -77,17 +77,26 @@ class CombatSystem:
         # Remove all marked sprites
         for proj in projectiles_to_remove:
             proj.remove_from_sprite_lists()
-        
-        for enemy in enemies_to_remove:
-            enemy.remove_from_sprite_lists()
-
 
         # Enemies hit Player
-        if self.engine.player:
-            hit_enemies = arcade.check_for_collision_with_list(self.engine.player, self.engine.enemies)
-            if hit_enemies:
-                print("Player Hit! Game Over logic here.")
-                # self.engine.close()
+        player = self.engine.player
+        if player:
+            hit_enemies = arcade.check_for_collision_with_list(player, self.engine.enemies)
+            for enemy in hit_enemies:
+                if enemy in enemies_to_remove:
+                    continue
+
+                damage = getattr(enemy, "damage", 1)
+                player.take_damage(damage)
+                enemies_to_remove.append(enemy)
+
+                if player.health <= 0:
+                    print("Player defeated!")
+                    self.engine.close()
+                    break
+
+        for enemy in enemies_to_remove:
+            enemy.remove_from_sprite_lists()
 
     def attack_nearest_enemy(self):
         if not self.engine.player or not self.engine.enemies:
