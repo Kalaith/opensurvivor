@@ -1,4 +1,6 @@
+from pathlib import Path
 import arcade
+from .audio import SoundManager
 from .input import InputHandler
 from ..content.map import MapDefinition
 from ..systems.spawning import SpawningSystem
@@ -24,6 +26,21 @@ class Engine(arcade.Window):
 
         self.input_handler = InputHandler()
 
+        # Audio
+        sfx_path = Path(__file__).resolve().parent.parent / "content" / "sfx"
+        self.sound_manager = SoundManager(
+            sfx_path,
+            volume_config={
+                "master": 0.6,
+                "sfx": {
+                    "attack": 0.35,
+                    "hit": 0.4,
+                    "xp_collect": 0.3,
+                    "level_up": 0.6,
+                },
+            },
+        )
+        self.sound_manager.load_sounds()
         # Map definition and obstacles
 
         # Sprite lists
