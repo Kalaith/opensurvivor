@@ -8,6 +8,7 @@ class Enemy(Entity):
         self.speed = 100.0
         self.target = None
         self.health = 1
+        self.damage = 10
 
     def take_damage(self, amount: int, engine) -> bool:
         """Apply damage and return True if the enemy died."""

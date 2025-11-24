@@ -43,7 +43,12 @@ class Engine(arcade.Window):
         
         # Draw UI / Debug info
         if self.player:
-            info_text = f"Pos: ({self.player.center_x:.1f}, {self.player.center_y:.1f}) | Enemies: {len(self.enemies)} | Level: {self.player.level} | XP: {self.player.xp}/{self.player.xp_to_next_level}"
+            health_text = f"HP: {self.player.health:.0f}/{self.player.max_health}"
+            info_text = (
+                f"Pos: ({self.player.center_x:.1f}, {self.player.center_y:.1f}) | "
+                f"Enemies: {len(self.enemies)} | {health_text} | "
+                f"Level: {self.player.level} | XP: {self.player.xp}/{self.player.xp_to_next_level}"
+            )
             text = arcade.Text(info_text, 10, 10, arcade.color.WHITE, 14)
             text.draw()
 
@@ -54,6 +59,7 @@ class Engine(arcade.Window):
             mx, my = self.input_handler.get_movement_vector()
             self.player.change_x = mx * self.player.speed * delta_time
             self.player.change_y = my * self.player.speed * delta_time
+            self.player.regenerate(delta_time)
 
         # Update Systems
         self.spawning_system.update(delta_time)
