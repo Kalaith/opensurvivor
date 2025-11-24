@@ -51,13 +51,23 @@ class CombatSystem:
             # Skip if already marked for removal
             if proj in projectiles_to_remove:
                 continue
-                
+
             hit_enemies = arcade.check_for_collision_with_list(proj, self.engine.enemies)
             if hit_enemies:
                 projectiles_to_remove.append(proj)
-                
+
                 for enemy in hit_enemies:
-                    if enemy not in enemies_to_remove:
+                    # Only process each enemy once per frame
+                    if enemy in enemies_to_remove:
+                        continue
+
+                    died = False
+                    if hasattr(enemy, "take_damage"):
+                        died = enemy.take_damage(1, self.engine)
+                    else:
+                        died = True
+
+                    if died:
                         enemies_to_remove.append(enemy)
                         # Spawn XP at enemy position
                         orb = ExperienceOrb(enemy.center_x, enemy.center_y)

@@ -2,24 +2,70 @@ from ...core.entity import Entity
 import math
 
 class Enemy(Entity):
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: float, y: float, width: int = 24, height: int = 24, color=(255, 50, 50)):
         # Red square for enemy
-        super().__init__(x, y, 24, 24, (255, 50, 50))
+        super().__init__(x, y, width, height, color)
         self.speed = 100.0
         self.target = None
+        self.health = 1
+
+    def take_damage(self, amount: int, engine) -> bool:
+        """Apply damage and return True if the enemy died."""
+        self.health -= amount
+        if self.health <= 0:
+            self.on_death(engine)
+            return True
+        return False
+
+    def on_death(self, engine):
+        """Hook for subclasses to spawn new enemies or effects on death."""
+        return None
 
     def update_target(self, dt: float):
         if self.target:
             # Simple tracking
             dx = self.target.center_x - self.center_x
             dy = self.target.center_y - self.center_y
-            
+
             dist = math.sqrt(dx*dx + dy*dy)
-            
+
             if dist > 0:
                 dx /= dist
                 dy /= dist
-                
+
             # Set velocity with delta_time for smooth movement
             self.change_x = dx * self.speed * dt
             self.change_y = dy * self.speed * dt
+
+
+class ArmoredEnemy(Enemy):
+    """A sturdier enemy that takes multiple hits."""
+
+    def __init__(self, x: float, y: float):
+        super().__init__(x, y, 28, 28, (50, 100, 255))
+        self.health = 3
+        self.speed = 80.0
+
+
+class SplittingEnemy(Enemy):
+    """Enemy that splits into smaller versions on death."""
+
+    def __init__(self, x: float, y: float, generation: int = 0):
+        self.generation = generation
+        size = 26 if generation == 0 else 18
+        color = (120, 255, 120) if generation == 0 else (80, 200, 80)
+        super().__init__(x, y, size, size, color)
+        self.health = 1
+        self.speed = 110.0 if generation == 0 else 140.0
+
+    def on_death(self, engine):
+        # Only split once
+        if self.generation >= 1:
+            return
+
+        offsets = [(-12, 0), (12, 0)]
+        for dx, dy in offsets:
+            child = SplittingEnemy(self.center_x + dx, self.center_y + dy, generation=self.generation + 1)
+            child.target = self.target
+            engine.enemies.append(child)
+            engine.all_sprites.append(child)
