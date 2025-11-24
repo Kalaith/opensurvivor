@@ -58,8 +58,6 @@ class Engine(arcade.Window):
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
 
-        self.elapsed_time = 0.0
-        
         # Set background color
         arcade.set_background_color((30, 30, 30))
 
@@ -122,12 +120,14 @@ class Engine(arcade.Window):
         if self.player:
             movers.append(self.player)
         movers.extend(self.enemies)
-        previous_positions = {sprite: (sprite.center_x, sprite.center_y) for sprite in movers}
+        previous_positions = [
+            (sprite.center_x, sprite.center_y) for sprite in movers
+        ]
 
         self.all_sprites.update()
 
-        for sprite in movers:
-            self._apply_bounds_and_collisions(sprite, previous_positions.get(sprite))
+        for sprite, previous_pos in zip(movers, previous_positions):
+            self._apply_bounds_and_collisions(sprite, previous_pos)
 
     def on_key_press(self, key, modifiers):
         if self.leveling_system.handle_input(key):
