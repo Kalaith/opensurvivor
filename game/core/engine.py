@@ -173,11 +173,11 @@ class Engine(arcade.Window):
 
     def _draw_map_background(self) -> None:
         """Render the arena area with a solid fill and grid."""
-        arcade.draw_lrtb_rectangle_filled(
+        arcade.draw_lrbt_rectangle_filled(
             0,
             self.map.width,
-            self.map.height,
             0,
+            self.map.height,
             color=self.map.background_color,
         )
 
