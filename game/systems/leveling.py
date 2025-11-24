@@ -55,6 +55,7 @@ class LevelingSystem:
         hits = arcade.check_for_collision_with_list(self.engine.player, self.engine.items)
         for orb in hits:
             self.add_xp(orb.value)
+            self.engine.sound_manager.play("xp_collect")
             orb.remove_from_sprite_lists()
 
     def add_xp(self, amount: int):
@@ -81,6 +82,7 @@ class LevelingSystem:
         self.current_choices = choices
         self.awaiting_choice = True
         self.engine.paused = True
+        self.engine.sound_manager.play("level_up")
 
     def handle_input(self, key):
         if not self.awaiting_choice:

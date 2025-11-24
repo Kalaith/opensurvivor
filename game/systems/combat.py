@@ -64,6 +64,7 @@ class CombatSystem:
                     died = False
                     if hasattr(enemy, "take_damage"):
                         died = enemy.take_damage(1, self.engine)
+                        self.engine.sound_manager.play("hit")
                     else:
                         died = True
 
@@ -98,6 +99,7 @@ class CombatSystem:
 
                 damage = getattr(enemy, "damage", 1)
                 player.take_damage(damage)
+                self.engine.sound_manager.play("hit")
                 enemies_to_remove.append(enemy)
 
                 if player.health <= 0:
@@ -143,6 +145,7 @@ class CombatSystem:
                 )
                 self.engine.projectiles.append(proj)
                 self.engine.all_sprites.append(proj)
+                self.engine.sound_manager.play("attack")
 
     def spawn_orbitals(self):
         if not self.engine.player:
@@ -153,6 +156,7 @@ class CombatSystem:
             proj = OrbitingProjectile(self.engine.player, angle)
             self.engine.projectiles.append(proj)
             self.engine.all_sprites.append(proj)
+        self.engine.sound_manager.play("attack")
 
     def fire_cardinal_burst(self):
         if not self.engine.player:
@@ -174,6 +178,7 @@ class CombatSystem:
             )
             self.engine.projectiles.append(proj)
             self.engine.all_sprites.append(proj)
+        self.engine.sound_manager.play("attack")
 
     def get_attack_cooldown(self) -> float:
         if not self.engine.player:
