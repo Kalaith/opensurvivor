@@ -19,6 +19,7 @@ class Engine(arcade.Window):
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
         self.player = None
+        self.paused = False
         
         # Systems
         self.spawning_system = SpawningSystem(self)
@@ -40,7 +41,7 @@ class Engine(arcade.Window):
         """Render the game."""
         self.clear()
         self.all_sprites.draw()
-        
+
         # Draw UI / Debug info
         if self.player:
             health_text = f"HP: {self.player.health:.0f}/{self.player.max_health}"
@@ -52,8 +53,14 @@ class Engine(arcade.Window):
             text = arcade.Text(info_text, 10, 10, arcade.color.WHITE, 14)
             text.draw()
 
+        # Draw level-up overlay
+        self.leveling_system.draw()
+
     def on_update(self, delta_time: float):
         """Update game state."""
+        if self.paused:
+            return
+
         # Handle Player Movement
         if self.player:
             mx, my = self.input_handler.get_movement_vector()
@@ -70,6 +77,8 @@ class Engine(arcade.Window):
         self.all_sprites.update()
 
     def on_key_press(self, key, modifiers):
+        if self.leveling_system.handle_input(key):
+            return
         self.input_handler.on_key_press(key, modifiers)
 
     def on_key_release(self, key, modifiers):

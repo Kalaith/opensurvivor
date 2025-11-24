@@ -12,6 +12,13 @@ class Player(Entity):
         self.level = 1
         self.xp_to_next_level = 100
 
+        # Weapon stats
+        self.projectile_size = 8
+        self.projectile_speed = 400.0
+        self.projectile_lifetime = 2.0
+        self.projectile_pierce = 1
+        self.attack_speed_multiplier = 1.0
+
         # Health
         self.max_health = 100
         self.health = self.max_health
