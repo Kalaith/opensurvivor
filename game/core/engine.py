@@ -16,12 +16,15 @@ class Engine(arcade.Window):
         title: str = "Open Survivor",
         map_definition: MapDefinition | None = None,
     ):
-        super().__init__(width, height, title)
+        # Build or accept the map definition before creating the window so the
+        # window dimensions stay aligned with the intended playfield.
+        self.map = map_definition or MapDefinition(width=width, height=height)
+
+        super().__init__(int(self.map.width), int(self.map.height), title)
 
         self.input_handler = InputHandler()
 
         # Map definition and obstacles
-        self.map = map_definition or MapDefinition(width=width, height=height)
 
         # Sprite lists
         self.all_sprites = arcade.SpriteList()
