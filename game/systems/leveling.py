@@ -1,7 +1,7 @@
 import arcade
 import random
 from dataclasses import dataclass
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 
 @dataclass
@@ -9,6 +9,8 @@ class UpgradeOption:
     title: str
     description: str
     apply: Callable[[object], None]
+    icon: str = ""
+    tooltip: str = ""
 
 
 class LevelingSystem:
@@ -16,38 +18,92 @@ class LevelingSystem:
         self.engine = engine
         self.awaiting_choice = False
         self.current_choices: List[UpgradeOption] = []
+        self.option_boxes: List[Tuple[float, float, float, float]] = []
+        self.last_mouse_pos: Tuple[float, float] = (0.0, 0.0)
+        self.feedback_message: str = ""
+        self.feedback_timer: float = 0.0
+
+        self.upgrade_sound = arcade.load_sound(":resources:sounds/upgrade5.wav")
+
+        def grow_projectiles(player):
+            player.projectile_size += 2
+
+        def accelerate_projectiles(player):
+            player.projectile_speed *= 1.15
+
+        def pierce_more(player):
+            player.projectile_pierce += 1
+
+        def attack_faster(player):
+            player.attack_speed_multiplier *= 1.15
+
+        def bolster_health(player):
+            player.max_health += 25
+            player.health = min(player.max_health, player.health + 25)
+
+        def regenerative_surplus(player):
+            player.regen_rate *= 1.3
+            player.regen_cooldown = max(0.5, player.regen_cooldown - 0.5)
+
+        def swift_stride(player):
+            player.speed *= 1.1
+
         self.upgrade_pool = [
             UpgradeOption(
                 "Bigger Projectiles",
                 "+2 size to projectiles",
-                lambda player: setattr(player, "projectile_size", player.projectile_size + 2),
+                grow_projectiles,
+                icon="⬤",
+                tooltip="Projectiles occupy more space, improving hits.",
             ),
             UpgradeOption(
                 "Faster Projectiles",
                 "+15% projectile speed",
-                lambda player: setattr(
-                    player, "projectile_speed", player.projectile_speed * 1.15
-                ),
+                accelerate_projectiles,
+                icon="➹",
+                tooltip="Shots reach targets sooner.",
             ),
             UpgradeOption(
                 "More Penetration",
                 "+1 enemy pierce",
-                lambda player: setattr(
-                    player, "projectile_pierce", player.projectile_pierce + 1
-                ),
+                pierce_more,
+                icon="↪",
+                tooltip="Bullets carry through another foe.",
             ),
             UpgradeOption(
                 "Shoot Faster",
                 "+15% attack speed",
-                lambda player: setattr(
-                    player,
-                    "attack_speed_multiplier",
-                    player.attack_speed_multiplier * 1.15,
-                ),
+                attack_faster,
+                icon="⚡",
+                tooltip="Shorter delays between shots.",
+            ),
+            UpgradeOption(
+                "Fortified Frame",
+                "+25 max HP and heal 25",
+                bolster_health,
+                icon="❤",
+                tooltip="Stay in the fight longer with extra vitality.",
+            ),
+            UpgradeOption(
+                "Regenerative Surge",
+                "+30% regen rate, -0.5s regen delay",
+                regenerative_surplus,
+                icon="✚",
+                tooltip="Healing ramps up sooner after damage.",
+            ),
+            UpgradeOption(
+                "Fleet Footing",
+                "+10% movement speed",
+                swift_stride,
+                icon="➤",
+                tooltip="Cover ground and dodge threats faster.",
             ),
         ]
 
     def update(self, dt: float):
+        if self.feedback_timer > 0:
+            self.feedback_timer = max(0.0, self.feedback_timer - dt)
+
         if not self.engine.player:
             return
 
@@ -81,6 +137,7 @@ class LevelingSystem:
         )
         self.current_choices = choices
         self.awaiting_choice = True
+        self.option_boxes = []
         self.engine.paused = True
         self.engine.sound_manager.play("level_up")
 
@@ -104,12 +161,32 @@ class LevelingSystem:
                 return True
         return False
 
+    def handle_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        self.last_mouse_pos = (x, y)
+
+    def handle_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        if not self.awaiting_choice:
+            return False
+
+        if button != arcade.MOUSE_BUTTON_LEFT:
+            return False
+
+        for idx, box in enumerate(self.option_boxes):
+            if self._point_in_box(x, y, box):
+                self.apply_choice(idx)
+                return True
+
+        return False
+
     def apply_choice(self, index: int):
         if not (0 <= index < len(self.current_choices)):
             return
 
         choice = self.current_choices[index]
         choice.apply(self.engine.player)
+        arcade.play_sound(self.upgrade_sound)
+        self.feedback_message = f"{choice.title} applied!"
+        self.feedback_timer = 1.6
         self.awaiting_choice = False
         self.current_choices = []
         self.engine.paused = False
@@ -120,25 +197,127 @@ class LevelingSystem:
             self.level_up()
 
     def draw(self):
-        if not self.awaiting_choice:
-            return
-
         width, height = self.engine.width, self.engine.height
-        arcade.draw_rectangle_filled(
-            width / 2, height / 2, width * 0.6, height * 0.5, (0, 0, 0, 200)
-        )
 
-        header = arcade.Text(
-            "Level Up! Choose an upgrade:", width / 2, height / 2 + 120, anchor_x="center"
-        )
-        header.draw()
+        if self.awaiting_choice:
+            panel_width, panel_height = width * 0.7, height * 0.65
+            panel_x, panel_y = width / 2, height / 2
+            self.option_boxes = []
 
-        for i, opt in enumerate(self.current_choices, start=1):
-            line = f"{i}. {opt.title} - {opt.description}"
-            text = arcade.Text(line, width / 2 - 200, height / 2 + 80 - (i * 40))
-            text.draw()
+            arcade.draw_rectangle_filled(
+                panel_x, panel_y, width, height, (10, 10, 25, 180)
+            )
+            arcade.draw_rectangle_filled(
+                panel_x, panel_y, panel_width, panel_height, (25, 28, 45, 230)
+            )
+            arcade.draw_rectangle_outline(
+                panel_x, panel_y, panel_width, panel_height, (120, 180, 255, 255), 4
+            )
 
-        hint = arcade.Text(
-            "Press 1, 2, or 3 to select", width / 2, height / 2 - 140, anchor_x="center"
-        )
-        hint.draw()
+            header = arcade.Text(
+                "Level Up!", panel_x, panel_y + panel_height / 2 - 60, 0xE6F1FF, 34, anchor_x="center"
+            )
+            subheader = arcade.Text(
+                "Choose an upgrade to power up.",
+                panel_x,
+                panel_y + panel_height / 2 - 95,
+                0xC3D1FF,
+                18,
+                anchor_x="center",
+            )
+            header.draw()
+            subheader.draw()
+
+            option_height = 110
+            option_spacing = 16
+            top_y = panel_y + panel_height / 2 - 140
+
+            for i, opt in enumerate(self.current_choices):
+                option_center_y = top_y - i * (option_height + option_spacing)
+                left = panel_x - panel_width / 2 + 40
+                right = panel_x + panel_width / 2 - 40
+                bottom = option_center_y - option_height / 2
+                top = option_center_y + option_height / 2
+                box = (left, bottom, right, top)
+                self.option_boxes.append(box)
+
+                is_hovered = self._point_in_box(*self.last_mouse_pos, box)
+                bg_color = (50, 60, 90, 230) if is_hovered else (38, 44, 70, 210)
+                arcade.draw_lrtb_rectangle_filled(left, right, top, bottom, bg_color)
+                arcade.draw_lrtb_rectangle_outline(
+                    left, right, top, bottom, (150, 200, 255, 255), 2
+                )
+
+                badge_text = arcade.Text(
+                    f"{i + 1}", left + 14, option_center_y, 0xFFFFFF, 16, anchor_y="center"
+                )
+                badge_radius = 18
+                arcade.draw_circle_filled(
+                    left + badge_radius, option_center_y, badge_radius, (90, 125, 255, 255)
+                )
+                badge_text.draw()
+
+                title = arcade.Text(
+                    f"{opt.icon} {opt.title}",
+                    left + 46,
+                    option_center_y + 28,
+                    0xFFFFFF,
+                    20,
+                    bold=True,
+                )
+                description = arcade.Text(
+                    opt.description,
+                    left + 46,
+                    option_center_y,
+                    0xCFE0FF,
+                    15,
+                )
+                tooltip = arcade.Text(
+                    opt.tooltip or "Click or press number to select",
+                    left + 46,
+                    option_center_y - 24,
+                    0x9FB4E4,
+                    13,
+                )
+
+                title.draw()
+                description.draw()
+                tooltip.draw()
+
+            hint = arcade.Text(
+                "Click or press 1, 2, or 3 to select an upgrade",
+                panel_x,
+                panel_y - panel_height / 2 + 40,
+                0xE6F1FF,
+                16,
+                anchor_x="center",
+            )
+            hint.draw()
+        else:
+            self.option_boxes = []
+
+        if self.feedback_timer > 0 and self.feedback_message:
+            feedback = arcade.Text(
+                self.feedback_message,
+                width / 2,
+                height - 40,
+                0xD8F3DC,
+                18,
+                anchor_x="center",
+                bold=True,
+            )
+            shadow = arcade.Text(
+                self.feedback_message,
+                width / 2 + 2,
+                height - 42,
+                (0, 0, 0, 180),
+                18,
+                anchor_x="center",
+                bold=True,
+            )
+            shadow.draw()
+            feedback.draw()
+
+    def _point_in_box(self, x: float, y: float, box: Tuple[float, float, float, float]) -> bool:
+        left, bottom, right, top = box
+        return left <= x <= right and bottom <= y <= top

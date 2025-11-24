@@ -18,9 +18,8 @@ def main():
     # Arcade window creation happens in Engine.__init__
     engine = Engine(title="Open Survivor - v0.1")
     
-    # Create Player
-    # Center of screen
-    player = Player(engine.width / 2, engine.height / 2)
+    # Create Player at center of the map bounds
+    player = Player(engine.map.width / 2, engine.map.height / 2)
     engine.set_player(player)
     
     engine.start()
