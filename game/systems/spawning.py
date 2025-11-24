@@ -18,18 +18,20 @@ class SpawningSystem:
     def spawn_enemy(self):
         # Spawn at random edge
         side = random.choice(['top', 'bottom', 'left', 'right'])
+        map_width = self.engine.map.width
+        map_height = self.engine.map.height
         if side == 'top':
-            x = random.uniform(0, self.engine.width)
-            y = self.engine.height + 50
+            x = random.uniform(0, map_width)
+            y = map_height + 50
         elif side == 'bottom':
-            x = random.uniform(0, self.engine.width)
+            x = random.uniform(0, map_width)
             y = -50
         elif side == 'left':
             x = -50
-            y = random.uniform(0, self.engine.height)
+            y = random.uniform(0, map_height)
         else:
-            x = self.engine.width + 50
-            y = random.uniform(0, self.engine.height)
+            x = map_width + 50
+            y = random.uniform(0, map_height)
         
         enemy_class = random.choices(
             population=[Enemy, SplittingEnemy, ArmoredEnemy],
