@@ -66,7 +66,12 @@ class SoundManager:
         amplitude = 8000
         num_frames = int(sample_rate * duration)
 
-        with wave.open(path, "w") as wav_file:
+        # `wave.open` only accepts string paths or file objects; providing a
+        # `Path` directly leaves the underlying `Wave_write` object holding a
+        # `Path` instead of an open file handle, which causes an AttributeError
+        # when it tries to write the header on Windows. Convert to `str` to
+        # ensure the file is opened correctly on all platforms.
+        with wave.open(str(path), "w") as wav_file:
             wav_file.setnchannels(1)
             wav_file.setsampwidth(2)  # 16-bit samples
             wav_file.setframerate(sample_rate)
