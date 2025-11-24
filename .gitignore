@@ -137,3 +137,4 @@ Thumbs.db
 check_arcade.py
 check_nulls.py
 run_game.py
+game/content/sfx/*.wav
