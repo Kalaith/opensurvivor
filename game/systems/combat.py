@@ -1,5 +1,5 @@
 import arcade
-from ..content.weapons.projectile import Projectile
+from ..content.weapons.projectile import CardinalProjectile, OrbitingProjectile, Projectile
 from ..content.items.experience import ExperienceOrb
 
 class CombatSystem:
@@ -7,6 +7,10 @@ class CombatSystem:
         self.engine = engine
         self.attack_timer = 0.0
         self.attack_cooldown = 0.5
+        self.orbit_timer = 0.0
+        self.orbit_cooldown = 2.0
+        self.cardinal_timer = 0.0
+        self.cardinal_cooldown = 1.5
 
     def update(self, dt: float):
         # Update Projectiles
@@ -25,6 +29,18 @@ class CombatSystem:
         if self.attack_timer <= 0:
             self.attack_nearest_enemy()
             self.attack_timer = self.attack_cooldown
+
+        # Orbiting blades weapon
+        self.orbit_timer -= dt
+        if self.orbit_timer <= 0:
+            self.spawn_orbitals()
+            self.orbit_timer = self.orbit_cooldown
+
+        # Four-direction burst weapon
+        self.cardinal_timer -= dt
+        if self.cardinal_timer <= 0:
+            self.fire_cardinal_burst()
+            self.cardinal_timer = self.cardinal_cooldown
 
         # Collisions - Projectiles hit Enemies
         # Collect sprites to remove to avoid modifying lists during iteration
@@ -85,7 +101,29 @@ class CombatSystem:
             if length > 0:
                 dx /= length
                 dy /= length
-                
+
                 proj = Projectile(px, py, dx, dy)
                 self.engine.projectiles.append(proj)
                 self.engine.all_sprites.append(proj)
+
+    def spawn_orbitals(self):
+        if not self.engine.player:
+            return
+
+        # Spawn three blades evenly spaced around the player
+        for angle in (0, 120, 240):
+            proj = OrbitingProjectile(self.engine.player, angle)
+            self.engine.projectiles.append(proj)
+            self.engine.all_sprites.append(proj)
+
+    def fire_cardinal_burst(self):
+        if not self.engine.player:
+            return
+
+        px, py = self.engine.player.center_x, self.engine.player.center_y
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
+        for dx, dy in directions:
+            proj = CardinalProjectile(px, py, dx, dy)
+            self.engine.projectiles.append(proj)
+            self.engine.all_sprites.append(proj)
