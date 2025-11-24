@@ -6,7 +6,7 @@ class CombatSystem:
     def __init__(self, engine):
         self.engine = engine
         self.attack_timer = 0.0
-        self.attack_cooldown = 0.5
+        self.base_attack_cooldown = 0.5
         self.orbit_timer = 0.0
         self.orbit_cooldown = 2.0
         self.cardinal_timer = 0.0
@@ -28,7 +28,7 @@ class CombatSystem:
         self.attack_timer -= dt
         if self.attack_timer <= 0:
             self.attack_nearest_enemy()
-            self.attack_timer = self.attack_cooldown
+            self.attack_timer = self.get_attack_cooldown()
 
         # Orbiting blades weapon
         self.orbit_timer -= dt
@@ -54,7 +54,7 @@ class CombatSystem:
 
             hit_enemies = arcade.check_for_collision_with_list(proj, self.engine.enemies)
             if hit_enemies:
-                projectiles_to_remove.append(proj)
+                remaining_pierce = getattr(proj, "pierce", 1)
 
                 for enemy in hit_enemies:
                     # Only process each enemy once per frame
@@ -73,6 +73,16 @@ class CombatSystem:
                         orb = ExperienceOrb(enemy.center_x, enemy.center_y)
                         self.engine.items.append(orb)
                         self.engine.all_sprites.append(orb)
+
+                    remaining_pierce -= 1
+                    proj.pierce = remaining_pierce
+                    if remaining_pierce <= 0:
+                        projectiles_to_remove.append(proj)
+                        break
+
+                if remaining_pierce > 0 and proj not in projectiles_to_remove:
+                    # Allow the projectile to keep flying without removal
+                    continue
         
         # Remove all marked sprites
         for proj in projectiles_to_remove:
@@ -121,7 +131,16 @@ class CombatSystem:
                 dx /= length
                 dy /= length
 
-                proj = Projectile(px, py, dx, dy)
+                proj = Projectile(
+                    px,
+                    py,
+                    dx,
+                    dy,
+                    size=self.engine.player.projectile_size,
+                    speed=self.engine.player.projectile_speed,
+                    lifetime=self.engine.player.projectile_lifetime,
+                    pierce=self.engine.player.projectile_pierce,
+                )
                 self.engine.projectiles.append(proj)
                 self.engine.all_sprites.append(proj)
 
@@ -143,6 +162,21 @@ class CombatSystem:
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
         for dx, dy in directions:
-            proj = CardinalProjectile(px, py, dx, dy)
+            proj = CardinalProjectile(
+                px,
+                py,
+                dx,
+                dy,
+                size=self.engine.player.projectile_size,
+                speed=self.engine.player.projectile_speed,
+                lifetime=self.engine.player.projectile_lifetime,
+                pierce=self.engine.player.projectile_pierce,
+            )
             self.engine.projectiles.append(proj)
             self.engine.all_sprites.append(proj)
+
+    def get_attack_cooldown(self) -> float:
+        if not self.engine.player:
+            return self.base_attack_cooldown
+        # Higher multiplier means faster attack speed (shorter cooldown)
+        return self.base_attack_cooldown / max(0.1, self.engine.player.attack_speed_multiplier)

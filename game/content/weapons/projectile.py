@@ -1,12 +1,26 @@
 import math
 from ...core.entity import Entity
 
+
 class Projectile(Entity):
-    def __init__(self, x: float, y: float, dx: float, dy: float, color=(255, 255, 0)):
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        dx: float,
+        dy: float,
+        *,
+        size: int = 8,
+        speed: float = 400.0,
+        lifetime: float = 2.0,
+        pierce: int = 1,
+        color=(255, 255, 0),
+    ):
         # Yellow small square
-        super().__init__(x, y, 8, 8, color)
-        self.speed = 400.0
-        self.lifetime = 2.0 # Seconds
+        super().__init__(x, y, size, size, color)
+        self.speed = speed
+        self.lifetime = lifetime  # Seconds
+        self.pierce = max(1, pierce)
 
         # Store velocity in pixels per second
         self.vx = dx * self.speed
@@ -21,12 +35,32 @@ class Projectile(Entity):
         self.change_x = self.vx * dt
         self.change_y = self.vy * dt
 
-
 class CardinalProjectile(Projectile):
     """Projectile that travels in a fixed cardinal direction."""
 
-    def __init__(self, x: float, y: float, dx: float, dy: float):
-        super().__init__(x, y, dx, dy, color=(255, 165, 0))
+    def __init__(
+        self,
+        x: float,
+        y: float,
+        dx: float,
+        dy: float,
+        *,
+        size: int = 8,
+        speed: float = 400.0,
+        lifetime: float = 2.0,
+        pierce: int = 1,
+    ):
+        super().__init__(
+            x,
+            y,
+            dx,
+            dy,
+            size=size,
+            speed=speed,
+            lifetime=lifetime,
+            pierce=pierce,
+            color=(255, 165, 0),
+        )
 
 
 class OrbitingProjectile(Entity):
