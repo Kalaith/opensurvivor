@@ -20,6 +20,7 @@ class Engine(arcade.Window):
         self.items = arcade.SpriteList()
         self.player = None
         self.paused = False
+        self.elapsed_time = 0.0
         
         # Systems
         self.spawning_system = SpawningSystem(self)
@@ -45,13 +46,30 @@ class Engine(arcade.Window):
         # Draw UI / Debug info
         if self.player:
             health_text = f"HP: {self.player.health:.0f}/{self.player.max_health}"
+            timer_minutes = int(self.elapsed_time // 60)
+            timer_seconds = int(self.elapsed_time % 60)
+            timer_text = f"Time: {timer_minutes:02d}:{timer_seconds:02d}"
+            wave_text = self.spawning_system.get_wave_status()
             info_text = (
-                f"Pos: ({self.player.center_x:.1f}, {self.player.center_y:.1f}) | "
-                f"Enemies: {len(self.enemies)} | {health_text} | "
-                f"Level: {self.player.level} | XP: {self.player.xp}/{self.player.xp_to_next_level}"
+                f"{timer_text} | Pos: ({self.player.center_x:.1f}, {self.player.center_y:.1f}) | "
+                f"Enemies: {len(self.enemies)}/{self.spawning_system.max_enemies} | {health_text} | "
+                f"Level: {self.player.level} | XP: {self.player.xp}/{self.player.xp_to_next_level} | "
+                f"{wave_text}"
             )
             text = arcade.Text(info_text, 10, 10, arcade.color.WHITE, 14)
             text.draw()
+
+        notice = self.spawning_system.get_wave_notification()
+        if notice:
+            banner = arcade.Text(
+                notice,
+                self.width / 2,
+                self.height - 40,
+                arcade.color.YELLOW,
+                18,
+                anchor_x="center",
+            )
+            banner.draw()
 
         # Draw level-up overlay
         self.leveling_system.draw()
@@ -60,6 +78,8 @@ class Engine(arcade.Window):
         """Update game state."""
         if self.paused:
             return
+
+        self.elapsed_time += delta_time
 
         # Handle Player Movement
         if self.player:
