@@ -96,10 +96,7 @@ class SpawningSystem:
             x = map_width + 50
             y = random.uniform(0, map_height)
         
-        enemy_class = random.choices(
-            population=[Enemy, SplittingEnemy, ArmoredEnemy],
-            weights=[0.6, 0.25, 0.15],
-        )[0]
+        enemy_class = self._select_enemy_class()
 
         enemy = enemy_class(x, y)
         enemy.target = self.engine.player
