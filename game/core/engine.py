@@ -39,6 +39,8 @@ class Engine(arcade.Window):
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+
+        self.elapsed_time = 0.0
         
         # Set background color
         arcade.set_background_color((30, 30, 30))
@@ -61,16 +63,7 @@ class Engine(arcade.Window):
         self.obstacles.draw()
         self.all_sprites.draw()
 
-        # Draw UI / Debug info
-        if self.player:
-            health_text = f"HP: {self.player.health:.0f}/{self.player.max_health}"
-            info_text = (
-                f"Pos: ({self.player.center_x:.1f}, {self.player.center_y:.1f}) | "
-                f"Enemies: {len(self.enemies)} | {health_text} | "
-                f"Level: {self.player.level} | XP: {self.player.xp}/{self.player.xp_to_next_level}"
-            )
-            text = arcade.Text(info_text, 10, 10, arcade.color.WHITE, 14)
-            text.draw()
+        self._draw_hud()
 
         # Draw level-up overlay
         self.leveling_system.draw()
@@ -79,6 +72,8 @@ class Engine(arcade.Window):
         """Update game state."""
         if self.paused:
             return
+
+        self.elapsed_time += delta_time
 
         # Handle Player Movement
         if self.player:
@@ -156,3 +151,85 @@ class Engine(arcade.Window):
             arcade.draw_line(x, 0, x, self.map.height, grid_color, 1)
         for y in range(0, int(self.map.height) + 1, grid_spacing):
             arcade.draw_line(0, y, self.map.width, y, grid_color, 1)
+    def _draw_hud(self):
+        padding = 20
+        bar_width = 260
+        bar_height = 18
+        time_text = arcade.Text(
+            f"Survival: {self._format_elapsed_time()}",
+            padding,
+            padding,
+            arcade.color.WHITE,
+            16,
+        )
+
+        if self.player and self.player.health > 0:
+            hp_ratio = (
+                self.player.health / self.player.max_health if self.player.max_health else 0
+            )
+            xp_ratio = (
+                self.player.xp / self.player.xp_to_next_level
+                if self.player.xp_to_next_level
+                else 0
+            )
+
+            hp_y = self.height - padding - bar_height / 2
+            xp_y = hp_y - bar_height - 8
+
+            self._draw_bar(
+                padding + bar_width / 2,
+                hp_y,
+                bar_width,
+                bar_height,
+                hp_ratio,
+                (200, 0, 0),
+                (60, 20, 20),
+                f"HP {self.player.health:.0f}/{self.player.max_health}",
+            )
+
+            self._draw_bar(
+                padding + bar_width / 2,
+                xp_y,
+                bar_width,
+                bar_height,
+                xp_ratio,
+                (20, 120, 220),
+                (20, 40, 80),
+                f"XP {self.player.xp:.0f}/{self.player.xp_to_next_level}",
+            )
+
+            time_text.draw()
+        else:
+            game_over = arcade.Text(
+                "Game Over",
+                self.width / 2,
+                self.height - padding - 30,
+                arcade.color.WHITE,
+                28,
+                anchor_x="center",
+            )
+            game_over.draw()
+
+            time_text.center_x = self.width / 2
+            time_text.center_y = self.height - padding - 70
+            time_text.anchor_x = "center"
+            time_text.draw()
+
+    def _draw_bar(self, x, y, width, height, ratio, fill_color, background_color, label):
+        clamped_ratio = max(0.0, min(1.0, ratio))
+        arcade.draw_rectangle_filled(x, y, width, height, background_color)
+
+        filled_width = width * clamped_ratio
+        left = x - width / 2
+        if filled_width > 0:
+            arcade.draw_rectangle_filled(
+                left + filled_width / 2, y, filled_width, height, fill_color
+            )
+
+        text = arcade.Text(label, left + 6, y - height / 2 + 2, arcade.color.WHITE, 12)
+        text.draw()
+
+    def _format_elapsed_time(self) -> str:
+        minutes = int(self.elapsed_time) // 60
+        seconds = int(self.elapsed_time) % 60
+        return f"{minutes:02d}:{seconds:02d}"
