@@ -5,15 +5,78 @@ class SpawningSystem:
     def __init__(self, engine):
         self.engine = engine
         self.spawn_timer = 0.0
-        self.spawn_rate = 2.0 # Seconds
+        self.wave_profiles = [
+            {
+                "start": 0,
+                "spawn_rate": 2.0,
+                "weights": [
+                    (Enemy, 0.7),
+                    (SplittingEnemy, 0.2),
+                    (ArmoredEnemy, 0.1),
+                ],
+                "elite_chance": 0.0,
+                "max_enemies": 25,
+                "label": "Warm-up",
+            },
+            {
+                "start": 60,
+                "spawn_rate": 1.5,
+                "weights": [
+                    (Enemy, 0.55),
+                    (SplittingEnemy, 0.25),
+                    (ArmoredEnemy, 0.2),
+                ],
+                "elite_chance": 0.1,
+                "max_enemies": 35,
+                "label": "Pressure Rising",
+            },
+            {
+                "start": 120,
+                "spawn_rate": 1.1,
+                "weights": [
+                    (Enemy, 0.45),
+                    (SplittingEnemy, 0.3),
+                    (ArmoredEnemy, 0.25),
+                ],
+                "elite_chance": 0.2,
+                "max_enemies": 45,
+                "label": "Elite Threats",
+            },
+            {
+                "start": 180,
+                "spawn_rate": 0.9,
+                "weights": [
+                    (Enemy, 0.4),
+                    (SplittingEnemy, 0.3),
+                    (ArmoredEnemy, 0.3),
+                ],
+                "elite_chance": 0.3,
+                "max_enemies": 55,
+                "label": "Overwhelming Odds",
+            },
+        ]
+        self.current_wave_index = -1
+        self.current_profile = None
+        self.spawn_rate = 2.0
+        self.max_enemies = 40
+        self.wave_notification_timer = 0.0
+        self.wave_message = ""
+        self.elite_health_multiplier = 2.0
+        self.elite_speed_multiplier = 1.15
+        self._update_wave_profile(force=True)
 
     def update(self, dt: float):
+        self._update_wave_profile()
+        self.wave_notification_timer = max(0.0, self.wave_notification_timer - dt)
+
+        if len(self.engine.enemies) >= self.max_enemies:
+            self.spawn_timer = 0.0
+            return
+
         self.spawn_timer -= dt
         if self.spawn_timer <= 0:
             self.spawn_enemy()
             self.spawn_timer = self.spawn_rate
-            # Increase difficulty slightly
-            self.spawn_rate = max(0.5, self.spawn_rate * 0.98)
 
     def spawn_enemy(self):
         # Spawn at random edge
@@ -40,5 +103,52 @@ class SpawningSystem:
 
         enemy = enemy_class(x, y)
         enemy.target = self.engine.player
+        self._apply_elite_modifiers(enemy)
         self.engine.enemies.append(enemy)
         self.engine.all_sprites.append(enemy)
+
+    def _select_enemy_class(self):
+        if not self.current_profile:
+            return Enemy
+        population = [enemy for enemy, _ in self.current_profile["weights"]]
+        weights = [weight for _, weight in self.current_profile["weights"]]
+        return random.choices(population=population, weights=weights)[0]
+
+    def _apply_elite_modifiers(self, enemy):
+        chance = 0.0 if not self.current_profile else self.current_profile.get("elite_chance", 0.0)
+        if random.random() > chance:
+            return
+
+        enemy.health = int(enemy.health * self.elite_health_multiplier)
+        enemy.speed *= self.elite_speed_multiplier
+        if hasattr(enemy, "color"):
+            r, g, b = enemy.color
+            enemy.color = (min(255, int(r * 0.8)), min(255, int(g * 0.8)), min(255, int(b * 1.2)))
+        enemy.is_elite = True
+
+    def _update_wave_profile(self, force: bool = False):
+        elapsed = getattr(self.engine, "elapsed_time", 0.0)
+        new_index = self.current_wave_index
+        for idx, profile in enumerate(self.wave_profiles):
+            if elapsed >= profile["start"]:
+                new_index = idx
+        if force or new_index != self.current_wave_index:
+            self.current_wave_index = new_index
+            self.current_profile = self.wave_profiles[new_index]
+            self.spawn_rate = self.current_profile["spawn_rate"]
+            self.max_enemies = self.current_profile.get("max_enemies", self.max_enemies)
+            self.wave_message = f"Wave {self.current_wave_index + 1}: {self.current_profile.get('label', 'Unknown')}"
+            self.wave_notification_timer = 3.0
+            print(self.wave_message)
+
+    def get_wave_status(self) -> str:
+        if not self.current_profile:
+            return "Wave 0"
+        label = self.current_profile.get("label", "")
+        elite = int(self.current_profile.get("elite_chance", 0.0) * 100)
+        return f"Wave {self.current_wave_index + 1}: {label} (rate {self.spawn_rate:.2f}s, elite {elite}%)"
+
+    def get_wave_notification(self):
+        if self.wave_notification_timer <= 0:
+            return None
+        return self.wave_message

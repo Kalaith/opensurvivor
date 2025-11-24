@@ -34,6 +34,7 @@ class Engine(arcade.Window):
         self.obstacles = self.map.obstacles
         self.player = None
         self.paused = False
+        self.elapsed_time = 0.0
         
         # Systems
         self.spawning_system = SpawningSystem(self)
@@ -64,6 +65,18 @@ class Engine(arcade.Window):
         self.all_sprites.draw()
 
         self._draw_hud()
+
+        notice = self.spawning_system.get_wave_notification()
+        if notice:
+            banner = arcade.Text(
+                notice,
+                self.width / 2,
+                self.height - 40,
+                arcade.color.YELLOW,
+                18,
+                anchor_x="center",
+            )
+            banner.draw()
 
         # Draw level-up overlay
         self.leveling_system.draw()
