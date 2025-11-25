@@ -46,11 +46,17 @@ class CombatSystem:
         # Collect sprites to remove to avoid modifying lists during iteration
         projectiles_to_remove = []
         enemies_to_remove = []
-        
+
         for proj in self.engine.projectiles:
             # Skip if already marked for removal
             if proj in projectiles_to_remove:
                 continue
+
+            # Projectiles should be destroyed when hitting map obstacles
+            if hasattr(self.engine, "obstacles") and isinstance(proj, Projectile):
+                if arcade.check_for_collision_with_list(proj, self.engine.obstacles):
+                    projectiles_to_remove.append(proj)
+                    continue
 
             hit_enemies = arcade.check_for_collision_with_list(proj, self.engine.enemies)
             if hit_enemies:
