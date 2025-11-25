@@ -1,5 +1,8 @@
-from ...core.entity import Entity
+import arcade
 import math
+
+from ...core.entity import Entity
+from ...content.items.experience import ExperienceOrb
 
 class Enemy(Entity):
     def __init__(self, x: float, y: float, width: int = 24, height: int = 24, color=(255, 50, 50)):
@@ -70,3 +73,50 @@ class SplittingEnemy(Enemy):
             child.target = self.target
             engine.enemies.append(child)
             engine.all_sprites.append(child)
+
+
+class ExploderEnemy(Enemy):
+    """A circular enemy that explodes on death, damaging nearby units."""
+
+    def __init__(self, x: float, y: float):
+        diameter = 24
+        super().__init__(x, y, diameter, diameter, (255, 180, 50))
+        # Swap the solid color square for a circle texture
+        self.texture = arcade.make_circle_texture(diameter, self.color)
+        self.speed = 95.0
+        self.health = 2
+        self.explosion_radius = 80
+        self.explosion_damage = 1
+
+    def on_death(self, engine):
+        player = engine.player
+        defeated_enemies = []
+
+        # Damage nearby enemies (excluding self)
+        for other in list(engine.enemies):
+            if other is self:
+                continue
+
+            if self._is_within_explosion(other):
+                died = other.take_damage(self.explosion_damage, engine)
+                if died:
+                    defeated_enemies.append(other)
+
+        # Award XP and remove defeated enemies immediately so they don't linger
+        for enemy in defeated_enemies:
+            orb = ExperienceOrb(enemy.center_x, enemy.center_y)
+            engine.items.append(orb)
+            engine.all_sprites.append(orb)
+            enemy.remove_from_sprite_lists()
+
+        # Damage the player if they're inside the blast
+        if player and self._is_within_explosion(player):
+            player.take_damage(self.explosion_damage)
+            engine.sound_manager.play("hit")
+            if player.health <= 0:
+                engine.close()
+
+    def _is_within_explosion(self, sprite) -> bool:
+        dx = sprite.center_x - self.center_x
+        dy = sprite.center_y - self.center_y
+        return dx * dx + dy * dy <= self.explosion_radius * self.explosion_radius

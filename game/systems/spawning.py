@@ -1,5 +1,5 @@
 import random
-from ..content.characters.enemy import Enemy, ArmoredEnemy, SplittingEnemy
+from ..content.characters.enemy import Enemy, ArmoredEnemy, ExploderEnemy, SplittingEnemy
 
 class SpawningSystem:
     def __init__(self, engine):
@@ -11,8 +11,9 @@ class SpawningSystem:
                 "spawn_rate": 2.0,
                 "weights": [
                     (Enemy, 0.7),
-                    (SplittingEnemy, 0.2),
+                    (SplittingEnemy, 0.15),
                     (ArmoredEnemy, 0.1),
+                    (ExploderEnemy, 0.05),
                 ],
                 "elite_chance": 0.0,
                 "max_enemies": 25,
@@ -23,8 +24,9 @@ class SpawningSystem:
                 "spawn_rate": 1.5,
                 "weights": [
                     (Enemy, 0.55),
-                    (SplittingEnemy, 0.25),
+                    (SplittingEnemy, 0.2),
                     (ArmoredEnemy, 0.2),
+                    (ExploderEnemy, 0.05),
                 ],
                 "elite_chance": 0.1,
                 "max_enemies": 35,
@@ -34,9 +36,10 @@ class SpawningSystem:
                 "start": 120,
                 "spawn_rate": 1.1,
                 "weights": [
-                    (Enemy, 0.45),
-                    (SplittingEnemy, 0.3),
-                    (ArmoredEnemy, 0.25),
+                    (Enemy, 0.4),
+                    (SplittingEnemy, 0.28),
+                    (ArmoredEnemy, 0.22),
+                    (ExploderEnemy, 0.1),
                 ],
                 "elite_chance": 0.2,
                 "max_enemies": 45,
@@ -46,9 +49,10 @@ class SpawningSystem:
                 "start": 180,
                 "spawn_rate": 0.9,
                 "weights": [
-                    (Enemy, 0.4),
-                    (SplittingEnemy, 0.3),
-                    (ArmoredEnemy, 0.3),
+                    (Enemy, 0.35),
+                    (SplittingEnemy, 0.27),
+                    (ArmoredEnemy, 0.28),
+                    (ExploderEnemy, 0.1),
                 ],
                 "elite_chance": 0.3,
                 "max_enemies": 55,
