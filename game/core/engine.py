@@ -1,5 +1,8 @@
 from pathlib import Path
 import arcade
+# TODO(engine-extraction): Rendering and window lifecycle currently depend directly
+# on the arcade.Window base class; refactors will need to abstract drawing away
+# from this inheritance.
 from .audio import SoundManager
 from .input import InputHandler
 from .scenes import GameOverScene, GameplayScene
@@ -9,6 +12,8 @@ from ..systems.hud import HUDSystem
 from ..systems.spawning import SpawningSystem
 from ..systems.combat import CombatSystem
 from ..systems.leveling import LevelingSystem
+from ..systems.collision import CollisionSystem
+from ..systems.progression import ProgressionState, ProgressionSystem
 
 class Engine(arcade.Window):
     """
@@ -44,9 +49,11 @@ class Engine(arcade.Window):
             },
         )
         self.sound_manager.load_sounds()
-        # Map definition and obstacles
+        # TODO(engine-extraction): State bucket (world/terrain). Map definition
+        # and obstacle lists live on the engine and feed into rendering/collision.
 
-        # Sprite lists
+        # TODO(engine-extraction): Sprite aggregates used across systems (rendering
+        # + collisions); likely move into scene graph or entity store.
         self.all_sprites = arcade.SpriteList()
         self.enemies = arcade.SpriteList()
         self.projectiles = arcade.SpriteList()
@@ -54,35 +61,36 @@ class Engine(arcade.Window):
         self.obstacles = self.map.obstacles
         self.player = None
         self.paused = False
+        # Game flow and progression
         self.elapsed_time = 0.0
 
-        # Game flow and progression
+        # TODO(engine-extraction): State transitions bucket — menu/playing/game_over
+        # modes drive update/draw/input pathways.
         self.state = "menu"
         self.selected_character = "square"
-        self.current_character = None
-        self.last_score = 0.0
-        self.best_survival_times: dict[str, float] = {
-            "square": 0.0,
-            "triangle": 0.0,
-            "circle": 0.0,
-        }
-        self.unlocked_characters: set[str] = {"square"}
+        self.progression_state = ProgressionState()
 
-        # UI regions
+        # TODO(engine-extraction): HUD/UI bucket — menu/game-over layouts share
+        # positional dicts living on the engine rather than a UI scene object.
         self.card_regions: dict[str, dict[str, float]] = {}
         self.start_button = {"x": self.width / 2, "y": 120, "w": 220, "h": 50}
         self.menu_background_color = (25, 25, 35)
         self.return_button = {"x": self.width / 2, "y": 120, "w": 240, "h": 50}
 
         self._setup_characters()
-        
+
         # Systems
+        
+        # TODO(engine-extraction): Subsystem collaborators depend on Engine to
+        # query sprites, state, and input; consider inversion for testability.
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
         self.hud_system = HUDSystem()
         self.gameplay_scene = GameplayScene(self, self.hud_system)
         self.game_over_scene = GameOverScene(self)
+        self.collision_system = CollisionSystem()
+        self.progression_system = ProgressionSystem(self.characters)
 
         # Set background color
         arcade.set_background_color((30, 30, 30))
@@ -126,7 +134,7 @@ class Engine(arcade.Window):
         self.all_sprites.append(player)
 
     def start_game(self, character_key: str):
-        if character_key not in self.unlocked_characters:
+        if character_key not in self.progression_state.unlocked_characters:
             return
 
         self._reset_run_state()
@@ -140,7 +148,9 @@ class Engine(arcade.Window):
             starting_weapons=definition["starting_weapons"],
         )
         self.set_player(player)
-        self.current_character = character_key
+        self.progression_system.start_run(
+            self.progression_state, character_key=character_key
+        )
         self.state = "playing"
 
     def _reset_run_state(self):
@@ -148,11 +158,11 @@ class Engine(arcade.Window):
         self.enemies = arcade.SpriteList()
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
-        self.elapsed_time = 0.0
         self.paused = False
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.collision_system = CollisionSystem()
 
     def start(self):
         """Start the game loop."""
@@ -164,7 +174,32 @@ class Engine(arcade.Window):
 
         if self.state == "playing":
             self.gameplay_scene.draw()
+            # TODO(engine-extraction): Rendering bucket — map background, obstacles,
+            # sprite batch, HUD, and wave notifications belong in a render scene.
+            self._draw_map_background()
+
+            # Draw obstacles inside the map bounds
+            self.obstacles.draw()
+            self.all_sprites.draw()
+
+            self._draw_hud()
+
+            notice = self.spawning_system.get_wave_notification()
+            if notice:
+                banner = arcade.Text(
+                    notice,
+                    self.width / 2,
+                    self.height - 40,
+                    arcade.color.YELLOW,
+                    18,
+                    anchor_x="center",
+                )
+                banner.draw()
+
+            # Draw level-up overlay
+            self.leveling_system.draw()
         elif self.state == "menu":
+            # TODO(engine-extraction): HUD/UI bucket — menu scene rendering.
             self._draw_menu()
         elif self.state == "game_over":
             self.game_over_scene.draw()
@@ -177,10 +212,18 @@ class Engine(arcade.Window):
         if self.paused:
             return
 
-        self.elapsed_time += delta_time
+        self._update_gameplay_scene(delta_time)
 
-        self._update_unlocks()
+    def _update_gameplay_scene(self, delta_time: float) -> None:
+        player_alive = bool(self.player and self.player.health > 0)
+        self.progression_system.update(
+            self.progression_state,
+            delta_time,
+            player_alive=player_alive,
+        )
 
+        # TODO(engine-extraction): Input coupling — movement pulls directly from
+        # InputHandler tied to arcade window events.
         # Handle Player Movement
         if self.player:
             mx, my = self.input_handler.get_movement_vector()
@@ -188,11 +231,16 @@ class Engine(arcade.Window):
             self.player.change_y = my * self.player.speed * delta_time
             self.player.regenerate(delta_time)
 
+        # TODO(engine-extraction): Systems bucket — spawning, combat, leveling run
+        # per-frame and expect to mutate engine-managed sprite lists.
         # Update Systems
         self.spawning_system.update(delta_time)
         self.combat_system.update(delta_time)
         self.leveling_system.update(delta_time)
+        self.collision_system.update(self, delta_time)
 
+        # TODO(engine-extraction): Movement/collision bucket — SpriteList update
+        # followed by bounds+obstacle collision.
         # Update all sprites (this applies change_x/change_y to positions)
         movers = []
         if self.player:
@@ -233,33 +281,6 @@ class Engine(arcade.Window):
             return
         if self.leveling_system.handle_mouse_press(x, y, button, modifiers):
             return
-    def _apply_bounds_and_collisions(self, sprite: arcade.Sprite, previous_pos):
-        """Clamp sprites to the map bounds and prevent passing through obstacles."""
-        if previous_pos is None:
-            return
-
-        collided = False
-        if self.obstacles:
-            collided = bool(arcade.check_for_collision_with_list(sprite, self.obstacles))
-        if collided:
-            sprite.center_x, sprite.center_y = previous_pos
-            sprite.change_x = 0
-            sprite.change_y = 0
-
-        self._clamp_to_map(sprite)
-
-    def _clamp_to_map(self, sprite: arcade.Sprite) -> None:
-        """Keep a sprite inside the map rectangle."""
-        half_w = sprite.width / 2
-        half_h = sprite.height / 2
-        clamped_x = min(max(sprite.center_x, half_w), self.map.width - half_w)
-        clamped_y = min(max(sprite.center_y, half_h), self.map.height - half_h)
-
-        if clamped_x != sprite.center_x or clamped_y != sprite.center_y:
-            sprite.center_x = clamped_x
-            sprite.center_y = clamped_y
-            sprite.change_x = 0
-            sprite.change_y = 0
 
     def _handle_menu_click(self, x: float, y: float) -> None:
         for key, rect in self.card_regions.items():
@@ -284,7 +305,7 @@ class Engine(arcade.Window):
             self.state = "menu"
 
     def _can_start_selected_character(self) -> bool:
-        return self.selected_character in self.unlocked_characters
+        return self.selected_character in self.progression_state.unlocked_characters
 
     def _draw_map_background(self) -> None:
         """Render the arena area with a solid fill and grid."""
@@ -361,7 +382,7 @@ class Engine(arcade.Window):
         definition = self.characters[key]
         rect = self.card_regions[key]
         is_selected = key == self.selected_character
-        unlocked = key in self.unlocked_characters
+        unlocked = key in self.progression_state.unlocked_characters
         border_color = definition["color"] if unlocked else (80, 80, 80)
         background = (40, 40, 50)
         arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], background)
@@ -407,7 +428,9 @@ class Engine(arcade.Window):
             requirement = "Survive 10:00" if req else "Unlocked"
             if req:
                 prereq_name = self.characters[req["character"]]["name"]
-                best_time = self.best_survival_times.get(req["character"], 0)
+                best_time = self.progression_state.best_survival_times.get(
+                    req["character"], 0
+                )
                 requirement = f"Survive 10:00 as {prereq_name}\nBest: {self._format_time_value(best_time)}"
             lock_text = arcade.Text(
                 requirement,
@@ -441,6 +464,8 @@ class Engine(arcade.Window):
         self.best_survival_times[self.current_character] = max(best, self.last_score)
 
     def _update_unlocks(self):
+        # TODO(engine-extraction): Progression/unlocks bucket — survival time ties
+        # directly into character availability; isolate from frame update loop.
         if self.current_character:
             best = self.best_survival_times.get(self.current_character, 0.0)
             if self.elapsed_time > best:
@@ -455,9 +480,7 @@ class Engine(arcade.Window):
         if self.state != "playing":
             return
 
-        self.last_score = self.elapsed_time
-        self._record_survival_time()
-        self._update_unlocks()
+        self.progression_system.record_game_over(self.progression_state)
         self.state = "game_over"
 
         # Clear active sprites so the next run starts fresh
