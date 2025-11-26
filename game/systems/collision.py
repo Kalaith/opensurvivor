@@ -1,6 +1,109 @@
 import arcade
 import math
-from collections import defaultdict
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+
+@dataclass
+class _QuadItem:
+    sprite: arcade.Sprite
+    radius: float
+
+    @property
+    def bounds(self) -> Tuple[float, float, float, float]:
+        diameter = self.radius * 2
+        return (
+            self.sprite.center_x - self.radius,
+            self.sprite.center_y - self.radius,
+            diameter,
+            diameter,
+        )
+
+
+class _QuadNode:
+    """Lightweight quadtree node for broad-phase collision pruning."""
+
+    def __init__(self, x: float, y: float, w: float, h: float, depth: int, max_depth: int, capacity: int = 8):
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.depth = depth
+        self.max_depth = max_depth
+        self.capacity = capacity
+        self.items: List[_QuadItem] = []
+        self.children: Optional[Tuple['_QuadNode', '_QuadNode', '_QuadNode', '_QuadNode']] = None
+
+    def insert(self, item: _QuadItem) -> None:
+        if self.children:
+            child = self._child_for(item)
+            if child:
+                child.insert(item)
+                return
+
+        self.items.append(item)
+
+        if len(self.items) > self.capacity and self.depth < self.max_depth:
+            self._subdivide()
+
+    def query(self, rect: Tuple[float, float, float, float], results: List[_QuadItem]) -> None:
+        if not self._intersects(rect, (self.x, self.y, self.w, self.h)):
+            return
+
+        results.extend(self.items)
+        if not self.children:
+            return
+
+        for child in self.children:
+            child.query(rect, results)
+
+    def _child_for(self, item: _QuadItem) -> Optional['_QuadNode']:
+        if not self.children:
+            return None
+
+        cx = item.sprite.center_x
+        cy = item.sprite.center_y
+        half_w = self.w * 0.5
+        half_h = self.h * 0.5
+
+        in_left = cx + item.radius <= self.x + half_w
+        in_right = cx - item.radius >= self.x + half_w
+        in_bottom = cy + item.radius <= self.y + half_h
+        in_top = cy - item.radius >= self.y + half_h
+
+        # If the circle straddles the split, keep it here to avoid missed pairs.
+        if not ((in_left or in_right) and (in_bottom or in_top)):
+            return None
+
+        index = 0
+        if in_right:
+            index += 1
+        if in_top:
+            index += 2
+        return self.children[index]
+
+    def _subdivide(self) -> None:
+        half_w = self.w * 0.5
+        half_h = self.h * 0.5
+        next_depth = self.depth + 1
+        self.children = (
+            _QuadNode(self.x, self.y, half_w, half_h, next_depth, self.max_depth, self.capacity),
+            _QuadNode(self.x + half_w, self.y, half_w, half_h, next_depth, self.max_depth, self.capacity),
+            _QuadNode(self.x, self.y + half_h, half_w, half_h, next_depth, self.max_depth, self.capacity),
+            _QuadNode(self.x + half_w, self.y + half_h, half_w, half_h, next_depth, self.max_depth, self.capacity),
+        )
+
+        # Re-insert existing items so they settle into child nodes where possible.
+        current_items = self.items
+        self.items = []
+        for item in current_items:
+            self.insert(item)
+
+    @staticmethod
+    def _intersects(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> bool:
+        ax, ay, aw, ah = a
+        bx, by, bw, bh = b
+        return not (ax + aw < bx or bx + bw < ax or ay + ah < by or by + bh < ay)
 
 
 class CollisionSystem:
@@ -26,7 +129,7 @@ class CollisionSystem:
                 sprite, previous_pos, obstacles=obstacles, game_map=world.map
             )
 
-        self._resolve_enemy_collisions(world, previous_positions)
+        self._resolve_enemy_collisions(world)
 
     def apply_bounds_and_collisions(self, sprite, previous_pos, obstacles, game_map):
         """Clamp sprites to map bounds and prevent passing through obstacles."""
@@ -63,7 +166,7 @@ class CollisionSystem:
         movers.extend(getattr(world, "enemies", []))
         return movers
 
-    def _resolve_enemy_collisions(self, world, previous_positions):
+    def _resolve_enemy_collisions(self, world):
         """Separate enemies softly so they pack toward the player without clumping."""
 
         enemies = getattr(world, "enemies", [])
@@ -71,33 +174,41 @@ class CollisionSystem:
             return
 
         radii = self._cache_radii(enemies)
-        cell_size = self._estimate_cell_size(radii)
-        buckets = self._bucket_enemies(enemies, cell_size)
+        quad_root = self._build_quadtree(enemies, radii, world.map.width, world.map.height)
+        max_radius = max(radii.values())
 
-        neighbor_offsets = (-1, 0, 1)
+        moved = set()
         for enemy in enemies:
-            cell_x, cell_y = self._cell_for(enemy, cell_size)
-            for dx in neighbor_offsets:
-                for dy in neighbor_offsets:
-                    for other in buckets.get((cell_x + dx, cell_y + dy), []):
-                        if enemy is other or id(enemy) >= id(other):
-                            continue
-                        self._separate_enemies(enemy, other, radii)
+            search_radius = (radii[enemy] + max_radius) * 1.2
+            candidates = self._query_quadtree(quad_root, enemy, search_radius)
 
-    def _cell_for(self, sprite, cell_size: int) -> tuple[int, int]:
-        return int(sprite.center_x // cell_size), int(sprite.center_y // cell_size)
+            for other in candidates:
+                if enemy is other or id(enemy) >= id(other):
+                    continue
+                if self._separate_enemies(enemy, other, radii):
+                    moved.add(enemy)
+                    moved.add(other)
 
-    def _bucket_enemies(self, enemies, cell_size: int):
-        buckets = defaultdict(list)
+        for enemy in moved:
+            self.clamp_to_map(enemy, world.map)
+
+    def _build_quadtree(self, enemies, radii: dict, width: float, height: float) -> _QuadNode:
+        root = _QuadNode(0.0, 0.0, width, height, depth=0, max_depth=6)
         for enemy in enemies:
-            buckets[self._cell_for(enemy, cell_size)].append(enemy)
-        return buckets
+            root.insert(_QuadItem(enemy, radii[enemy]))
+        return root
 
-    def _estimate_cell_size(self, radii: dict) -> int:
-        if not radii:
-            return 64
-        max_diameter = max(radii.values()) * 2
-        return max(32, int(max_diameter * 1.2))
+    def _query_quadtree(self, root: _QuadNode, sprite, radius: float) -> List[arcade.Sprite]:
+        search_rect = (
+            sprite.center_x - radius,
+            sprite.center_y - radius,
+            radius * 2,
+            radius * 2,
+        )
+
+        matches: List[_QuadItem] = []
+        root.query(search_rect, matches)
+        return [item.sprite for item in matches]
 
     def _cache_radii(self, enemies) -> dict:
         radii = {}
@@ -107,7 +218,7 @@ class CollisionSystem:
             )
         return radii
 
-    def _separate_enemies(self, a, b, radii=None) -> None:
+    def _separate_enemies(self, a, b, radii=None) -> bool:
         radius_a = (radii or {}).get(
             a, getattr(a, "collision_radius", min(a.width, a.height) * 0.5)
         )
@@ -126,7 +237,7 @@ class CollisionSystem:
             dx, dy, dist_sq = 1.0, 0.0, 1.0
 
         if dist_sq >= desired_distance * desired_distance:
-            return
+            return False
 
         dist = math.sqrt(dist_sq)
         overlap = desired_distance - dist
@@ -137,6 +248,7 @@ class CollisionSystem:
         a.center_y -= ny * push
         b.center_x += nx * push
         b.center_y += ny * push
+        return True
 
     def _revert_to_previous(self, sprite, previous_positions):
         if sprite not in previous_positions:
