@@ -18,8 +18,9 @@ class CollisionSystem:
         world.all_sprites.update()
 
         for sprite, previous_pos in zip(movers, previous_positions):
+            obstacles = world.obstacles if sprite is getattr(world, "player", None) else None
             self.apply_bounds_and_collisions(
-                sprite, previous_pos, obstacles=world.obstacles, game_map=world.map
+                sprite, previous_pos, obstacles=obstacles, game_map=world.map
             )
 
     def apply_bounds_and_collisions(self, sprite, previous_pos, obstacles, game_map):
