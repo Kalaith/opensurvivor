@@ -3,6 +3,7 @@ import arcade
 from .audio import SoundManager
 from .input import InputHandler
 from ..content.map import MapDefinition
+from ..content.characters.player import Player
 from ..systems.spawning import SpawningSystem
 from ..systems.combat import CombatSystem
 from ..systems.leveling import LevelingSystem
@@ -52,6 +53,26 @@ class Engine(arcade.Window):
         self.player = None
         self.paused = False
         self.elapsed_time = 0.0
+
+        # Game flow and progression
+        self.state = "menu"
+        self.selected_character = "square"
+        self.current_character = None
+        self.last_score = 0.0
+        self.best_survival_times: dict[str, float] = {
+            "square": 0.0,
+            "triangle": 0.0,
+            "circle": 0.0,
+        }
+        self.unlocked_characters: set[str] = {"square"}
+
+        # UI regions
+        self.card_regions: dict[str, dict[str, float]] = {}
+        self.start_button = {"x": self.width / 2, "y": 120, "w": 220, "h": 50}
+        self.menu_background_color = (25, 25, 35)
+        self.return_button = {"x": self.width / 2, "y": 120, "w": 240, "h": 50}
+
+        self._setup_characters()
         
         # Systems
         self.spawning_system = SpawningSystem(self)
@@ -61,9 +82,72 @@ class Engine(arcade.Window):
         # Set background color
         arcade.set_background_color((30, 30, 30))
 
+    def _setup_characters(self) -> None:
+        self.characters = {
+            "square": {
+                "name": "Square",
+                "color": (0, 128, 255),
+                "starting_weapons": {"projectile"},
+                "blurb": "Straight shooter with a focused projectile.",
+                "unlock": None,
+            },
+            "triangle": {
+                "name": "Triangle",
+                "color": (255, 120, 0),
+                "starting_weapons": {"orbitals"},
+                "blurb": "Spins blades around itself to clear space.",
+                "unlock": {"character": "square", "seconds": 600},
+            },
+            "circle": {
+                "name": "Circle",
+                "color": (120, 220, 120),
+                "starting_weapons": {"cardinal"},
+                "blurb": "Fires a spread of projectiles in all directions.",
+                "unlock": {"character": "triangle", "seconds": 600},
+            },
+        }
+
+        margin = 30
+        card_width = 280
+        card_height = 160
+        start_x = (self.width - (card_width * 3 + margin * 2)) / 2 + card_width / 2
+        center_y = self.height / 2 + 80
+        for idx, key in enumerate(["square", "triangle", "circle"]):
+            center_x = start_x + idx * (card_width + margin)
+            self.card_regions[key] = {"x": center_x, "y": center_y, "w": card_width, "h": card_height}
+
     def set_player(self, player):
         self.player = player
         self.all_sprites.append(player)
+
+    def start_game(self, character_key: str):
+        if character_key not in self.unlocked_characters:
+            return
+
+        self._reset_run_state()
+        definition = self.characters[character_key]
+        start_x = self.map.width / 2
+        start_y = self.map.height / 2
+        player = Player(
+            start_x,
+            start_y,
+            color=definition["color"],
+            starting_weapons=definition["starting_weapons"],
+        )
+        self.set_player(player)
+        self.current_character = character_key
+        self.state = "playing"
+
+    def _reset_run_state(self):
+        self.all_sprites = arcade.SpriteList()
+        self.enemies = arcade.SpriteList()
+        self.projectiles = arcade.SpriteList()
+        self.items = arcade.SpriteList()
+        self.elapsed_time = 0.0
+        self.paused = False
+        self.spawning_system = SpawningSystem(self)
+        self.combat_system = CombatSystem(self)
+        self.leveling_system = LevelingSystem(self)
 
     def start(self):
         """Start the game loop."""
@@ -73,35 +157,45 @@ class Engine(arcade.Window):
         """Render the game."""
         self.clear()
 
-        self._draw_map_background()
+        if self.state == "playing":
+            self._draw_map_background()
 
-        # Draw obstacles inside the map bounds
-        self.obstacles.draw()
-        self.all_sprites.draw()
+            # Draw obstacles inside the map bounds
+            self.obstacles.draw()
+            self.all_sprites.draw()
 
-        self._draw_hud()
+            self._draw_hud()
 
-        notice = self.spawning_system.get_wave_notification()
-        if notice:
-            banner = arcade.Text(
-                notice,
-                self.width / 2,
-                self.height - 40,
-                arcade.color.YELLOW,
-                18,
-                anchor_x="center",
-            )
-            banner.draw()
+            notice = self.spawning_system.get_wave_notification()
+            if notice:
+                banner = arcade.Text(
+                    notice,
+                    self.width / 2,
+                    self.height - 40,
+                    arcade.color.YELLOW,
+                    18,
+                    anchor_x="center",
+                )
+                banner.draw()
 
-        # Draw level-up overlay
-        self.leveling_system.draw()
+            # Draw level-up overlay
+            self.leveling_system.draw()
+        elif self.state == "menu":
+            self._draw_menu()
+        elif self.state == "game_over":
+            self._draw_game_over()
 
     def on_update(self, delta_time: float):
         """Update game state."""
+        if self.state != "playing":
+            return
+
         if self.paused:
             return
 
         self.elapsed_time += delta_time
+
+        self._update_unlocks()
 
         # Handle Player Movement
         if self.player:
@@ -130,17 +224,29 @@ class Engine(arcade.Window):
             self._apply_bounds_and_collisions(sprite, previous_pos)
 
     def on_key_press(self, key, modifiers):
+        if self.state != "playing":
+            return
         if self.leveling_system.handle_input(key):
             return
         self.input_handler.on_key_press(key, modifiers)
 
     def on_key_release(self, key, modifiers):
+        if self.state != "playing":
+            return
         self.input_handler.on_key_release(key, modifiers)
 
     def on_mouse_motion(self, x, y, dx, dy):
+        if self.state != "playing":
+            return
         self.leveling_system.handle_mouse_motion(x, y, dx, dy)
 
     def on_mouse_press(self, x, y, button, modifiers):
+        if self.state == "menu":
+            self._handle_menu_click(x, y)
+            return
+        if self.state == "game_over":
+            self._handle_game_over_click(x, y)
+            return
         if self.leveling_system.handle_mouse_press(x, y, button, modifiers):
             return
     def _apply_bounds_and_collisions(self, sprite: arcade.Sprite, previous_pos):
@@ -171,6 +277,31 @@ class Engine(arcade.Window):
             sprite.change_x = 0
             sprite.change_y = 0
 
+    def _handle_menu_click(self, x: float, y: float) -> None:
+        for key, rect in self.card_regions.items():
+            if abs(x - rect["x"]) <= rect["w"] / 2 and abs(y - rect["y"]) <= rect["h"] / 2:
+                self.selected_character = key
+                break
+
+        if not self._can_start_selected_character():
+            return
+
+        if (
+            abs(x - self.start_button["x"]) <= self.start_button["w"] / 2
+            and abs(y - self.start_button["y"]) <= self.start_button["h"] / 2
+        ):
+            self.start_game(self.selected_character)
+
+    def _handle_game_over_click(self, x: float, y: float) -> None:
+        if (
+            abs(x - self.return_button["x"]) <= self.return_button["w"] / 2
+            and abs(y - self.return_button["y"]) <= self.return_button["h"] / 2
+        ):
+            self.state = "menu"
+
+    def _can_start_selected_character(self) -> bool:
+        return self.selected_character in self.unlocked_characters
+
     def _draw_map_background(self) -> None:
         """Render the arena area with a solid fill and grid."""
         arcade.draw_lrbt_rectangle_filled(
@@ -187,6 +318,179 @@ class Engine(arcade.Window):
             arcade.draw_line(x, 0, x, self.map.height, grid_color, 1)
         for y in range(0, int(self.map.height) + 1, grid_spacing):
             arcade.draw_line(0, y, self.map.width, y, grid_color, 1)
+
+    def _draw_menu(self):
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, self.menu_background_color)
+
+        title = arcade.Text(
+            "Open Survivor",
+            self.width / 2,
+            self.height - 120,
+            arcade.color.WHITE,
+            36,
+            anchor_x="center",
+        )
+        subtitle = arcade.Text(
+            "Choose your character to begin",
+            self.width / 2,
+            self.height - 170,
+            arcade.color.LIGHT_GRAY,
+            18,
+            anchor_x="center",
+        )
+        title.draw()
+        subtitle.draw()
+
+        for key in ["square", "triangle", "circle"]:
+            self._draw_character_card(key)
+
+        can_start = self._can_start_selected_character()
+        button_color = (70, 170, 90) if can_start else (80, 80, 80)
+        arcade.draw_rectangle_filled(
+            self.start_button["x"],
+            self.start_button["y"],
+            self.start_button["w"],
+            self.start_button["h"],
+            button_color,
+        )
+        start_label = "Start Run" if can_start else "Locked"
+        start_text = arcade.Text(
+            start_label,
+            self.start_button["x"],
+            self.start_button["y"] - 10,
+            arcade.color.WHITE,
+            18,
+            anchor_x="center",
+        )
+        start_text.draw()
+        info_text = arcade.Text(
+            "Unlock characters by surviving 10:00 with their prerequisite hero.",
+            self.width / 2,
+            60,
+            arcade.color.LIGHT_GRAY,
+            14,
+            anchor_x="center",
+        )
+        info_text.draw()
+
+    def _draw_character_card(self, key: str) -> None:
+        definition = self.characters[key]
+        rect = self.card_regions[key]
+        is_selected = key == self.selected_character
+        unlocked = key in self.unlocked_characters
+        border_color = definition["color"] if unlocked else (80, 80, 80)
+        background = (40, 40, 50)
+        arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], background)
+        arcade.draw_rectangle_outline(rect["x"], rect["y"], rect["w"], rect["h"], border_color, 3)
+
+        name_text = arcade.Text(
+            definition["name"],
+            rect["x"],
+            rect["y"] + 40,
+            arcade.color.WHITE,
+            18,
+            anchor_x="center",
+        )
+        name_text.draw()
+
+        blurb_text = arcade.Text(
+            definition["blurb"],
+            rect["x"] - rect["w"] / 2 + 12,
+            rect["y"],
+            arcade.color.LIGHT_GRAY,
+            12,
+            width=rect["w"] - 24,
+        )
+        blurb_text.draw()
+
+        weapon_names = ", ".join(self._weapon_label(w) for w in sorted(definition["starting_weapons"]))
+        weapon_text = arcade.Text(
+            f"Starts with: {weapon_names}",
+            rect["x"],
+            rect["y"] - 22,
+            arcade.color.WHITE,
+            12,
+            anchor_x="center",
+        )
+        weapon_text.draw()
+
+        if is_selected:
+            arcade.draw_rectangle_outline(rect["x"], rect["y"], rect["w"] + 8, rect["h"] + 8, arcade.color.YELLOW, 2)
+
+        if not unlocked:
+            arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], (0, 0, 0, 160))
+            req = definition.get("unlock")
+            requirement = "Survive 10:00" if req else "Unlocked"
+            if req:
+                prereq_name = self.characters[req["character"]]["name"]
+                best_time = self.best_survival_times.get(req["character"], 0)
+                requirement = f"Survive 10:00 as {prereq_name}\nBest: {self._format_time_value(best_time)}"
+            lock_text = arcade.Text(
+                requirement,
+                rect["x"],
+                rect["y"] - 10,
+                arcade.color.LIGHT_GRAY,
+                12,
+                anchor_x="center",
+                align="center",
+                width=rect["w"] - 20,
+            )
+            lock_text.draw()
+
+    def _draw_game_over(self):
+        arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, self.menu_background_color)
+        headline = arcade.Text(
+            "Game Over",
+            self.width / 2,
+            self.height - 140,
+            arcade.color.WHITE,
+            36,
+            anchor_x="center",
+        )
+        headline.draw()
+
+        score_text = arcade.Text(
+            f"Survival Time: {self._format_time_value(self.last_score)}",
+            self.width / 2,
+            self.height - 190,
+            arcade.color.LIGHT_GRAY,
+            18,
+            anchor_x="center",
+        )
+        score_text.draw()
+
+        progress_lines = [
+            f"Square best: {self._format_time_value(self.best_survival_times['square'])}",
+            f"Triangle best: {self._format_time_value(self.best_survival_times['triangle'])}",
+            f"Circle best: {self._format_time_value(self.best_survival_times['circle'])}",
+        ]
+        for idx, line in enumerate(progress_lines):
+            text = arcade.Text(
+                line,
+                self.width / 2,
+                self.height - 230 - idx * 26,
+                arcade.color.LIGHT_GRAY,
+                14,
+                anchor_x="center",
+            )
+            text.draw()
+
+        arcade.draw_rectangle_filled(
+            self.return_button["x"],
+            self.return_button["y"],
+            self.return_button["w"],
+            self.return_button["h"],
+            (90, 120, 180),
+        )
+        return_text = arcade.Text(
+            "Return to Start",
+            self.return_button["x"],
+            self.return_button["y"] - 10,
+            arcade.color.WHITE,
+            18,
+            anchor_x="center",
+        )
+        return_text.draw()
     def _draw_hud(self):
         padding = 20
         bar_width = 260
@@ -270,3 +574,49 @@ class Engine(arcade.Window):
         minutes = int(self.elapsed_time) // 60
         seconds = int(self.elapsed_time) % 60
         return f"{minutes:02d}:{seconds:02d}"
+
+    def _format_time_value(self, seconds_value: float) -> str:
+        minutes = int(seconds_value) // 60
+        seconds = int(seconds_value) % 60
+        return f"{minutes:02d}:{seconds:02d}"
+
+    def _weapon_label(self, weapon_key: str) -> str:
+        names = {
+            "projectile": "Straight Shot",
+            "orbitals": "Spinning Blades",
+            "cardinal": "Spread Burst",
+        }
+        return names.get(weapon_key, weapon_key)
+
+    def _record_survival_time(self):
+        if not self.current_character:
+            return
+        best = self.best_survival_times.get(self.current_character, 0.0)
+        self.best_survival_times[self.current_character] = max(best, self.last_score)
+
+    def _update_unlocks(self):
+        if self.current_character:
+            best = self.best_survival_times.get(self.current_character, 0.0)
+            if self.elapsed_time > best:
+                self.best_survival_times[self.current_character] = self.elapsed_time
+
+        if self.best_survival_times.get("square", 0.0) >= 600:
+            self.unlocked_characters.add("triangle")
+        if self.best_survival_times.get("triangle", 0.0) >= 600:
+            self.unlocked_characters.add("circle")
+
+    def handle_game_over(self):
+        if self.state != "playing":
+            return
+
+        self.last_score = self.elapsed_time
+        self._record_survival_time()
+        self._update_unlocks()
+        self.state = "game_over"
+
+        # Clear active sprites so the next run starts fresh
+        self.all_sprites = arcade.SpriteList()
+        self.enemies = arcade.SpriteList()
+        self.projectiles = arcade.SpriteList()
+        self.items = arcade.SpriteList()
+        self.player = None
