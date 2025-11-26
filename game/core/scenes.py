@@ -97,9 +97,9 @@ class GameOverScene:
             )
             text.draw()
 
-        arcade.draw_rectangle_filled(
-            engine.return_button["x"],
-            engine.return_button["y"],
+        arcade.draw_lbwh_rectangle_filled(
+            engine.return_button["x"] - engine.return_button["w"] / 2,
+            engine.return_button["y"] - engine.return_button["h"] / 2,
             engine.return_button["w"],
             engine.return_button["h"],
             (90, 120, 180),

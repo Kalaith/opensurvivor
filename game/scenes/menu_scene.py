@@ -83,9 +83,9 @@ class MenuScene(BaseScene):
 
         can_start = self._can_start_selected_character()
         button_color = (70, 170, 90) if can_start else (80, 80, 80)
-        arcade.draw_rectangle_filled(
-            self.engine.start_button["x"],
-            self.engine.start_button["y"],
+        arcade.draw_lbwh_rectangle_filled(
+            self.engine.start_button["x"] - self.engine.start_button["w"] / 2,
+            self.engine.start_button["y"] - self.engine.start_button["h"] / 2,
             self.engine.start_button["w"],
             self.engine.start_button["h"],
             button_color,
@@ -117,8 +117,21 @@ class MenuScene(BaseScene):
         unlocked = key in self.engine.unlocked_characters
         border_color = definition["color"] if unlocked else (80, 80, 80)
         background = (40, 40, 50)
-        arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], background)
-        arcade.draw_rectangle_outline(rect["x"], rect["y"], rect["w"], rect["h"], border_color, 3)
+        arcade.draw_lbwh_rectangle_filled(
+            rect["x"] - rect["w"] / 2,
+            rect["y"] - rect["h"] / 2,
+            rect["w"],
+            rect["h"],
+            background,
+        )
+        arcade.draw_lbwh_rectangle_outline(
+            rect["x"] - rect["w"] / 2,
+            rect["y"] - rect["h"] / 2,
+            rect["w"],
+            rect["h"],
+            border_color,
+            3,
+        )
 
         name_text = arcade.Text(
             definition["name"],
@@ -152,10 +165,23 @@ class MenuScene(BaseScene):
         weapon_text.draw()
 
         if is_selected:
-            arcade.draw_rectangle_outline(rect["x"], rect["y"], rect["w"] + 8, rect["h"] + 8, arcade.color.YELLOW, 2)
+            arcade.draw_lbwh_rectangle_outline(
+                rect["x"] - (rect["w"] + 8) / 2,
+                rect["y"] - (rect["h"] + 8) / 2,
+                rect["w"] + 8,
+                rect["h"] + 8,
+                arcade.color.YELLOW,
+                2,
+            )
 
         if not unlocked:
-            arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], (0, 0, 0, 160))
+            arcade.draw_lbwh_rectangle_filled(
+                rect["x"] - rect["w"] / 2,
+                rect["y"] - rect["h"] / 2,
+                rect["w"],
+                rect["h"],
+                (0, 0, 0, 160),
+            )
             req = definition.get("unlock")
             requirement = "Survive 10:00" if req else "Unlocked"
             if req:
