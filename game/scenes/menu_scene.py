@@ -12,6 +12,39 @@ if TYPE_CHECKING:
 class MenuScene(BaseScene):
     def __init__(self, engine: "Engine"):
         self.engine = engine
+        self._title_text = arcade.Text(
+            "Open Survivor",
+            self.engine.width / 2,
+            self.engine.height - 120,
+            arcade.color.WHITE,
+            36,
+            anchor_x="center",
+        )
+        self._subtitle_text = arcade.Text(
+            "Choose your character to begin",
+            self.engine.width / 2,
+            self.engine.height - 170,
+            arcade.color.LIGHT_GRAY,
+            18,
+            anchor_x="center",
+        )
+        self._info_text = arcade.Text(
+            "Unlock characters by surviving 10:00 with their prerequisite hero.",
+            self.engine.width / 2,
+            60,
+            arcade.color.LIGHT_GRAY,
+            14,
+            anchor_x="center",
+        )
+        self._start_text = arcade.Text(
+            "Start Run",
+            self.engine.start_button["x"],
+            self.engine.start_button["y"] - 10,
+            arcade.color.WHITE,
+            18,
+            anchor_x="center",
+        )
+        self._card_texts: dict[str, dict[str, arcade.Text]] = {}
 
     def on_enter(self) -> None:
         pass
@@ -59,24 +92,8 @@ class MenuScene(BaseScene):
     def _draw_menu(self):
         arcade.draw_lrbt_rectangle_filled(0, self.engine.width, 0, self.engine.height, self.engine.menu_background_color)
 
-        title = arcade.Text(
-            "Open Survivor",
-            self.engine.width / 2,
-            self.engine.height - 120,
-            arcade.color.WHITE,
-            36,
-            anchor_x="center",
-        )
-        subtitle = arcade.Text(
-            "Choose your character to begin",
-            self.engine.width / 2,
-            self.engine.height - 170,
-            arcade.color.LIGHT_GRAY,
-            18,
-            anchor_x="center",
-        )
-        title.draw()
-        subtitle.draw()
+        self._title_text.draw()
+        self._subtitle_text.draw()
 
         for key in ["square", "triangle", "circle"]:
             self._draw_character_card(key)
@@ -91,24 +108,9 @@ class MenuScene(BaseScene):
             button_color,
         )
         start_label = "Start Run" if can_start else "Locked"
-        start_text = arcade.Text(
-            start_label,
-            self.engine.start_button["x"],
-            self.engine.start_button["y"] - 10,
-            arcade.color.WHITE,
-            18,
-            anchor_x="center",
-        )
-        start_text.draw()
-        info_text = arcade.Text(
-            "Unlock characters by surviving 10:00 with their prerequisite hero.",
-            self.engine.width / 2,
-            60,
-            arcade.color.LIGHT_GRAY,
-            14,
-            anchor_x="center",
-        )
-        info_text.draw()
+        self._start_text.text = start_label
+        self._start_text.draw()
+        self._info_text.draw()
 
     def _draw_character_card(self, key: str) -> None:
         definition = self.engine.characters[key]
@@ -133,36 +135,15 @@ class MenuScene(BaseScene):
             3,
         )
 
-        name_text = arcade.Text(
-            definition["name"],
-            rect["x"],
-            rect["y"] + 40,
-            arcade.color.WHITE,
-            18,
-            anchor_x="center",
-        )
-        name_text.draw()
-
-        blurb_text = arcade.Text(
-            definition["blurb"],
-            rect["x"] - rect["w"] / 2 + 12,
-            rect["y"],
-            arcade.color.LIGHT_GRAY,
-            12,
-            width=rect["w"] - 24,
-        )
-        blurb_text.draw()
-
+        card_texts = self._get_card_texts(key)
+        card_texts["name"].text = definition["name"]
+        card_texts["blurb"].text = definition["blurb"]
         weapon_names = ", ".join(self.engine.weapon_label(w) for w in sorted(definition["starting_weapons"]))
-        weapon_text = arcade.Text(
-            f"Starts with: {weapon_names}",
-            rect["x"],
-            rect["y"] - 22,
-            arcade.color.WHITE,
-            12,
-            anchor_x="center",
-        )
-        weapon_text.draw()
+        card_texts["weapon"].text = f"Starts with: {weapon_names}"
+
+        card_texts["name"].draw()
+        card_texts["blurb"].draw()
+        card_texts["weapon"].draw()
 
         if is_selected:
             arcade.draw_lbwh_rectangle_outline(
@@ -188,14 +169,46 @@ class MenuScene(BaseScene):
                 prereq_name = self.engine.characters[req["character"]]["name"]
                 best_time = self.engine.best_survival_times.get(req["character"], 0)
                 requirement = f"Survive 10:00 as {prereq_name}\nBest: {self.engine.format_time_value(best_time)}"
-            lock_text = arcade.Text(
-                requirement,
-                rect["x"],
-                rect["y"] - 10,
-                arcade.color.LIGHT_GRAY,
-                12,
-                anchor_x="center",
-                align="center",
-                width=rect["w"] - 20,
-            )
-            lock_text.draw()
+            card_texts["lock"].text = requirement
+            card_texts["lock"].draw()
+
+    def _get_card_texts(self, key: str) -> dict[str, arcade.Text]:
+        if key not in self._card_texts:
+            rect = self.engine.card_regions[key]
+            self._card_texts[key] = {
+                "name": arcade.Text(
+                    "",
+                    rect["x"],
+                    rect["y"] + 40,
+                    arcade.color.WHITE,
+                    18,
+                    anchor_x="center",
+                ),
+                "blurb": arcade.Text(
+                    "",
+                    rect["x"] - rect["w"] / 2 + 12,
+                    rect["y"],
+                    arcade.color.LIGHT_GRAY,
+                    12,
+                    width=rect["w"] - 24,
+                ),
+                "weapon": arcade.Text(
+                    "",
+                    rect["x"],
+                    rect["y"] - 22,
+                    arcade.color.WHITE,
+                    12,
+                    anchor_x="center",
+                ),
+                "lock": arcade.Text(
+                    "",
+                    rect["x"],
+                    rect["y"] - 10,
+                    arcade.color.LIGHT_GRAY,
+                    12,
+                    anchor_x="center",
+                    align="center",
+                    width=rect["w"] - 20,
+                ),
+            }
+        return self._card_texts[key]
