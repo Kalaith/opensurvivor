@@ -43,7 +43,12 @@ class _QuadNode:
 
         self.items.append(item)
 
-        if len(self.items) > self.capacity and self.depth < self.max_depth:
+        # Only subdivide once per node; items that straddle boundaries stay here.
+        if (
+            not self.children
+            and len(self.items) > self.capacity
+            and self.depth < self.max_depth
+        ):
             self._subdivide()
 
     def query(self, rect: Tuple[float, float, float, float], results: List[_QuadItem]) -> None:
