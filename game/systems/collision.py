@@ -1,4 +1,5 @@
 import arcade
+import math
 
 
 class CollisionSystem:
@@ -62,21 +63,42 @@ class CollisionSystem:
         return movers
 
     def _resolve_enemy_collisions(self, world, previous_positions):
-        """Prevent enemy sprites from stacking using their circular colliders."""
+        """Separate enemies softly so they pack toward the player without clumping."""
 
         enemies = getattr(world, "enemies", [])
+        if len(enemies) < 2:
+            return
+
         for idx, enemy in enumerate(enemies):
             for other in enemies[idx + 1 :]:
-                if self._enemy_circles_overlap(enemy, other):
-                    self._revert_to_previous(enemy, previous_positions)
-                    self._revert_to_previous(other, previous_positions)
+                self._separate_enemies(enemy, other)
 
-    def _enemy_circles_overlap(self, a, b) -> bool:
+    def _separate_enemies(self, a, b) -> None:
         radius_a = getattr(a, "collision_radius", min(a.width, a.height) * 0.5)
         radius_b = getattr(b, "collision_radius", min(b.width, b.height) * 0.5)
-        dx = a.center_x - b.center_x
-        dy = a.center_y - b.center_y
-        return dx * dx + dy * dy < (radius_a + radius_b) ** 2
+
+        desired_distance = (radius_a + radius_b) * 1.15  # Leave a small buffer between bodies
+
+        dx = b.center_x - a.center_x
+        dy = b.center_y - a.center_y
+        dist_sq = dx * dx + dy * dy
+
+        # If perfectly overlapping, pick an arbitrary direction to separate
+        if dist_sq == 0:
+            dx, dy, dist_sq = 1.0, 0.0, 1.0
+
+        if dist_sq >= desired_distance * desired_distance:
+            return
+
+        dist = math.sqrt(dist_sq)
+        overlap = desired_distance - dist
+        nx, ny = dx / dist, dy / dist
+        push = overlap * 0.5
+
+        a.center_x -= nx * push
+        a.center_y -= ny * push
+        b.center_x += nx * push
+        b.center_y += ny * push
 
     def _revert_to_previous(self, sprite, previous_positions):
         if sprite not in previous_positions:
