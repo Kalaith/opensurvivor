@@ -70,6 +70,7 @@ class SpawningSystem:
         self.elite_speed_multiplier = 1.15
         self.scaled_elite_chance = 0.0
         self.overwhelm_mode = False
+        self.hard_max_enemies = 1000
         # Enemy targeting throttle: keep distant, idle mobs light on CPU while
         # widening their engagement radius as difficulty rises.
         self.throttle_config = {
@@ -188,6 +189,7 @@ class SpawningSystem:
         base_max = self.current_profile.get("max_enemies", self.max_enemies)
         self.max_enemies = base_max + int(minutes_elapsed * 25)
         self.max_enemies = max(self.max_enemies, self.min_enemies)
+        self.max_enemies = min(self.max_enemies, self.hard_max_enemies)
 
         if self.overwhelm_mode:
             self.max_enemies = max(self.max_enemies, 150)
