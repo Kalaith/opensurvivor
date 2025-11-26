@@ -128,7 +128,9 @@ class Engine(arcade.Window):
             starting_weapons=definition["starting_weapons"],
         )
         self.set_player(player)
-        self.progression_state.current_character = character_key
+        self.progression_system.start_run(
+            self.progression_state, character_key=character_key
+        )
         self.state = "playing"
 
     def _reset_run_state(self):
@@ -140,8 +142,6 @@ class Engine(arcade.Window):
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
-        self.progression_system = ProgressionSystem(self.characters)
-        self.progression_state.elapsed_time = 0.0
 
     def start(self):
         """Start the game loop."""

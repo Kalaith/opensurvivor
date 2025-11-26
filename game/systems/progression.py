@@ -21,6 +21,13 @@ class ProgressionSystem:
     def __init__(self, character_definitions: Mapping[str, Mapping]):
         self.character_definitions = character_definitions
 
+    def start_run(self, state: ProgressionState, *, character_key: str) -> None:
+        """Initialize a new run for the chosen character."""
+        state.current_character = character_key
+        state.elapsed_time = 0.0
+        state.last_score = 0.0
+        state.best_survival_times.setdefault(character_key, 0.0)
+
     def update(
         self,
         state: ProgressionState,
