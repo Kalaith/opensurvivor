@@ -8,7 +8,7 @@ class Enemy(Entity):
     def __init__(self, x: float, y: float, width: int = 24, height: int = 24, color=(255, 50, 50)):
         # Red square for enemy
         super().__init__(x, y, width, height, color)
-        self.speed = 100.0
+        self.speed = 70.0
         self.target = None
         self.health = 1
         self.damage = 10
@@ -50,7 +50,7 @@ class ArmoredEnemy(Enemy):
     def __init__(self, x: float, y: float):
         super().__init__(x, y, 28, 28, (50, 100, 255))
         self.health = 3
-        self.speed = 80.0
+        self.speed = 60.0
 
 
 class SplittingEnemy(Enemy):
@@ -62,7 +62,7 @@ class SplittingEnemy(Enemy):
         color = (120, 255, 120) if generation == 0 else (80, 200, 80)
         super().__init__(x, y, size, size, color)
         self.health = 1
-        self.speed = 110.0 if generation == 0 else 140.0
+        self.speed = 90.0 if generation == 0 else 110.0
 
     def on_death(self, engine):
         # Only split once
@@ -85,7 +85,7 @@ class ExploderEnemy(Enemy):
         super().__init__(x, y, diameter, diameter, (255, 180, 50))
         # Swap the solid color square for a circle texture
         self.texture = arcade.make_circle_texture(diameter, self.color)
-        self.speed = 95.0
+        self.speed = 70.0
         self.health = 2
         self.explosion_radius = 80
         self.explosion_damage = 1
