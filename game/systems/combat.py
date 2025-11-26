@@ -21,9 +21,16 @@ class CombatSystem:
                 proj.update_projectile(dt)
 
         # Update Enemies
+        throttle_config = None
+        if getattr(self.engine, "spawning_system", None):
+            throttle_config = getattr(self.engine.spawning_system, "throttle_config", None)
+
         for enemy in self.engine.enemies:
             if hasattr(enemy, 'update_target'):
-                enemy.update_target(dt)
+                if throttle_config:
+                    self._update_enemy_target_with_throttle(enemy, dt, throttle_config)
+                else:
+                    enemy.update_target(dt)
 
         # Auto-attack
         player = self.engine.player
@@ -191,3 +198,44 @@ class CombatSystem:
             return self.base_attack_cooldown
         # Higher multiplier means faster attack speed (shorter cooldown)
         return self.base_attack_cooldown / max(0.1, self.engine.player.attack_speed_multiplier)
+
+    def _update_enemy_target_with_throttle(self, enemy, dt: float, cfg: dict) -> None:
+        player = self.engine.player
+        if not player:
+            enemy.update_target(dt)
+            return
+
+        # Track per-enemy stagnation to avoid needless retargeting when nothing
+        # is changing in the far field.
+        dx = enemy.center_x - enemy.last_pos[0]
+        dy = enemy.center_y - enemy.last_pos[1]
+        moved_sq = dx * dx + dy * dy
+        idle_threshold_sq = cfg.get("idle_distance", 0.0) ** 2
+        if moved_sq < idle_threshold_sq:
+            enemy.idle_frames += 1
+        else:
+            enemy.idle_frames = 0
+        enemy.last_pos = (enemy.center_x, enemy.center_y)
+
+        dist_x = enemy.center_x - player.center_x
+        dist_y = enemy.center_y - player.center_y
+        distance_sq = dist_x * dist_x + dist_y * dist_y
+        engage_sq = cfg.get("engage_radius", 0.0) ** 2
+        near_sq = cfg.get("near_radius", engage_sq) ** 2
+
+        enemy.target_cooldown = max(0.0, enemy.target_cooldown - dt)
+        recently_moved = enemy.idle_frames < cfg.get("idle_frame_grace", 0)
+        player_close = distance_sq <= near_sq
+        actively_engaging = distance_sq <= engage_sq
+
+        if player_close or recently_moved or actively_engaging:
+            enemy.target_cooldown = 0.0
+            enemy.update_target(dt)
+            enemy.target_cooldown = cfg.get("close_interval", cfg.get("minimum_interval", 0.0))
+            return
+
+        if enemy.target_cooldown > 0:
+            return
+
+        enemy.update_target(dt)
+        enemy.target_cooldown = cfg.get("distant_update_interval", 0.3)
