@@ -4,18 +4,20 @@ import types
 import arcade
 
 from game.core.engine import Engine
+from game.systems.collision import CollisionSystem
 from game.systems.spawning import SpawningSystem
+from game.systems.progression import ProgressionState, ProgressionSystem
 from game.content.characters.enemy import ExploderEnemy
 
 
 def _build_engine_stub():
-    engine = Engine.__new__(Engine)
-    engine.map = types.SimpleNamespace(width=100, height=80)
-    return engine
+    map_stub = types.SimpleNamespace(width=100, height=80)
+    return map_stub
 
 
 def test_clamp_to_map_limits_sprite_to_bounds():
-    engine = _build_engine_stub()
+    map_stub = _build_engine_stub()
+    collision_system = CollisionSystem()
     sprite = types.SimpleNamespace(
         width=20,
         height=10,
@@ -25,17 +27,18 @@ def test_clamp_to_map_limits_sprite_to_bounds():
         change_y=-3.0,
     )
 
-    engine._clamp_to_map(sprite)
+    collision_system.clamp_to_map(sprite, map_stub)
 
-    assert sprite.center_x == engine.map.width - sprite.width / 2
+    assert sprite.center_x == map_stub.width - sprite.width / 2
     assert sprite.center_y == sprite.height / 2
     assert sprite.change_x == 0
     assert sprite.change_y == 0
 
 
 def test_apply_bounds_resets_position_on_collision(monkeypatch):
-    engine = _build_engine_stub()
-    engine.obstacles = object()
+    map_stub = _build_engine_stub()
+    collision_system = CollisionSystem()
+    obstacles = object()
 
     sprite = types.SimpleNamespace(
         center_x=20.0,
@@ -51,9 +54,11 @@ def test_apply_bounds_resets_position_on_collision(monkeypatch):
         "check_for_collision_with_list",
         lambda *_args, **_kwargs: [True],
     )
-    engine._clamp_to_map = lambda _sprite: None
+    collision_system.clamp_to_map = lambda _sprite, _map: None
 
-    engine._apply_bounds_and_collisions(sprite, (10.0, 10.0))
+    collision_system.apply_bounds_and_collisions(
+        sprite, (10.0, 10.0), obstacles=obstacles, game_map=map_stub
+    )
 
     assert (sprite.center_x, sprite.center_y) == (10.0, 10.0)
     assert sprite.change_x == 0
@@ -110,11 +115,19 @@ def test_exploder_enemy_triggers_game_over_and_cleanup():
     # Construct a minimal engine with the necessary state but without running Engine.__init__.
     engine = Engine.__new__(Engine)
     engine.state = "playing"
-    engine.elapsed_time = 12.5
-    engine.current_character = "square"
-    engine.last_score = 0.0
-    engine.best_survival_times = {"square": 5.0, "triangle": 0.0, "circle": 0.0}
-    engine.unlocked_characters = set()
+    engine.progression_state = ProgressionState(
+        elapsed_time=12.5,
+        current_character="square",
+        best_survival_times={"square": 5.0, "triangle": 0.0, "circle": 0.0},
+        unlocked_characters=set(),
+    )
+    engine.progression_system = ProgressionSystem(
+        {
+            "square": {"unlock": None},
+            "triangle": {"unlock": {"character": "square", "seconds": 600}},
+            "circle": {"unlock": {"character": "triangle", "seconds": 600}},
+        }
+    )
     engine.all_sprites = [1]
     engine.enemies = []
     engine.projectiles = [1]
@@ -146,8 +159,11 @@ def test_exploder_enemy_triggers_game_over_and_cleanup():
     enemy.on_death(engine)
 
     assert engine.state == "game_over"
-    assert engine.last_score == engine.elapsed_time
-    assert engine.best_survival_times["square"] == engine.elapsed_time
+    assert engine.progression_state.last_score == engine.progression_state.elapsed_time
+    assert (
+        engine.progression_state.best_survival_times["square"]
+        == engine.progression_state.elapsed_time
+    )
     assert engine.player is None
     assert len(engine.all_sprites) == 0
     assert len(engine.projectiles) == 0
