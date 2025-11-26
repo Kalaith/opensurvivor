@@ -2,8 +2,10 @@ from pathlib import Path
 import arcade
 from .audio import SoundManager
 from .input import InputHandler
+from .scenes import GameOverScene, GameplayScene
 from ..content.map import MapDefinition
 from ..content.characters.player import Player
+from ..systems.hud import HUDSystem
 from ..systems.spawning import SpawningSystem
 from ..systems.combat import CombatSystem
 from ..systems.leveling import LevelingSystem
@@ -78,6 +80,9 @@ class Engine(arcade.Window):
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.hud_system = HUDSystem()
+        self.gameplay_scene = GameplayScene(self, self.hud_system)
+        self.game_over_scene = GameOverScene(self)
 
         # Set background color
         arcade.set_background_color((30, 30, 30))
@@ -158,32 +163,11 @@ class Engine(arcade.Window):
         self.clear()
 
         if self.state == "playing":
-            self._draw_map_background()
-
-            # Draw obstacles inside the map bounds
-            self.obstacles.draw()
-            self.all_sprites.draw()
-
-            self._draw_hud()
-
-            notice = self.spawning_system.get_wave_notification()
-            if notice:
-                banner = arcade.Text(
-                    notice,
-                    self.width / 2,
-                    self.height - 40,
-                    arcade.color.YELLOW,
-                    18,
-                    anchor_x="center",
-                )
-                banner.draw()
-
-            # Draw level-up overlay
-            self.leveling_system.draw()
+            self.gameplay_scene.draw()
         elif self.state == "menu":
             self._draw_menu()
         elif self.state == "game_over":
-            self._draw_game_over()
+            self.game_over_scene.draw()
 
     def on_update(self, delta_time: float):
         """Update game state."""
@@ -436,144 +420,6 @@ class Engine(arcade.Window):
                 width=rect["w"] - 20,
             )
             lock_text.draw()
-
-    def _draw_game_over(self):
-        arcade.draw_lrbt_rectangle_filled(0, self.width, 0, self.height, self.menu_background_color)
-        headline = arcade.Text(
-            "Game Over",
-            self.width / 2,
-            self.height - 140,
-            arcade.color.WHITE,
-            36,
-            anchor_x="center",
-        )
-        headline.draw()
-
-        score_text = arcade.Text(
-            f"Survival Time: {self._format_time_value(self.last_score)}",
-            self.width / 2,
-            self.height - 190,
-            arcade.color.LIGHT_GRAY,
-            18,
-            anchor_x="center",
-        )
-        score_text.draw()
-
-        progress_lines = [
-            f"Square best: {self._format_time_value(self.best_survival_times['square'])}",
-            f"Triangle best: {self._format_time_value(self.best_survival_times['triangle'])}",
-            f"Circle best: {self._format_time_value(self.best_survival_times['circle'])}",
-        ]
-        for idx, line in enumerate(progress_lines):
-            text = arcade.Text(
-                line,
-                self.width / 2,
-                self.height - 230 - idx * 26,
-                arcade.color.LIGHT_GRAY,
-                14,
-                anchor_x="center",
-            )
-            text.draw()
-
-        arcade.draw_rectangle_filled(
-            self.return_button["x"],
-            self.return_button["y"],
-            self.return_button["w"],
-            self.return_button["h"],
-            (90, 120, 180),
-        )
-        return_text = arcade.Text(
-            "Return to Start",
-            self.return_button["x"],
-            self.return_button["y"] - 10,
-            arcade.color.WHITE,
-            18,
-            anchor_x="center",
-        )
-        return_text.draw()
-    def _draw_hud(self):
-        padding = 20
-        bar_width = 260
-        bar_height = 18
-        time_text = arcade.Text(
-            f"Survival: {self._format_elapsed_time()}",
-            padding,
-            padding,
-            arcade.color.WHITE,
-            16,
-        )
-
-        if self.player and self.player.health > 0:
-            hp_ratio = (
-                self.player.health / self.player.max_health if self.player.max_health else 0
-            )
-            xp_ratio = (
-                self.player.xp / self.player.xp_to_next_level
-                if self.player.xp_to_next_level
-                else 0
-            )
-
-            hp_y = self.height - padding - bar_height / 2
-            xp_y = hp_y - bar_height - 8
-
-            self._draw_bar(
-                padding + bar_width / 2,
-                hp_y,
-                bar_width,
-                bar_height,
-                hp_ratio,
-                (200, 0, 0),
-                (60, 20, 20),
-                f"HP {self.player.health:.0f}/{self.player.max_health}",
-            )
-
-            self._draw_bar(
-                padding + bar_width / 2,
-                xp_y,
-                bar_width,
-                bar_height,
-                xp_ratio,
-                (20, 120, 220),
-                (20, 40, 80),
-                f"XP {self.player.xp:.0f}/{self.player.xp_to_next_level}",
-            )
-
-            time_text.draw()
-        else:
-            game_over = arcade.Text(
-                "Game Over",
-                self.width / 2,
-                self.height - padding - 30,
-                arcade.color.WHITE,
-                28,
-                anchor_x="center",
-            )
-            game_over.draw()
-
-            time_text.center_x = self.width / 2
-            time_text.center_y = self.height - padding - 70
-            time_text.anchor_x = "center"
-            time_text.draw()
-
-    def _draw_bar(self, x, y, width, height, ratio, fill_color, background_color, label):
-        clamped_ratio = max(0.0, min(1.0, ratio))
-        # x, y are center coordinates. Convert to bottom-left for lbwh.
-        arcade.draw_lbwh_rectangle_filled(x - width / 2, y - height / 2, width, height, background_color)
-
-        filled_width = width * clamped_ratio
-        left = x - width / 2
-        if filled_width > 0:
-            arcade.draw_lbwh_rectangle_filled(
-                left, y - height / 2, filled_width, height, fill_color
-            )
-
-        text = arcade.Text(label, left + 6, y - height / 2 + 2, arcade.color.WHITE, 12)
-        text.draw()
-
-    def _format_elapsed_time(self) -> str:
-        minutes = int(self.elapsed_time) // 60
-        seconds = int(self.elapsed_time) % 60
-        return f"{minutes:02d}:{seconds:02d}"
 
     def _format_time_value(self, seconds_value: float) -> str:
         minutes = int(seconds_value) // 60
