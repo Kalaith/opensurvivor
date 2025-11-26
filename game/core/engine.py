@@ -7,6 +7,7 @@ from ..content.characters.player import Player
 from ..systems.spawning import SpawningSystem
 from ..systems.combat import CombatSystem
 from ..systems.leveling import LevelingSystem
+from ..systems.progression import ProgressionState, ProgressionSystem
 
 class Engine(arcade.Window):
     """
@@ -52,19 +53,10 @@ class Engine(arcade.Window):
         self.obstacles = self.map.obstacles
         self.player = None
         self.paused = False
-        self.elapsed_time = 0.0
-
         # Game flow and progression
         self.state = "menu"
         self.selected_character = "square"
-        self.current_character = None
-        self.last_score = 0.0
-        self.best_survival_times: dict[str, float] = {
-            "square": 0.0,
-            "triangle": 0.0,
-            "circle": 0.0,
-        }
-        self.unlocked_characters: set[str] = {"square"}
+        self.progression_state = ProgressionState()
 
         # UI regions
         self.card_regions: dict[str, dict[str, float]] = {}
@@ -73,11 +65,12 @@ class Engine(arcade.Window):
         self.return_button = {"x": self.width / 2, "y": 120, "w": 240, "h": 50}
 
         self._setup_characters()
-        
+
         # Systems
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.progression_system = ProgressionSystem(self.characters)
 
         # Set background color
         arcade.set_background_color((30, 30, 30))
@@ -121,7 +114,7 @@ class Engine(arcade.Window):
         self.all_sprites.append(player)
 
     def start_game(self, character_key: str):
-        if character_key not in self.unlocked_characters:
+        if character_key not in self.progression_state.unlocked_characters:
             return
 
         self._reset_run_state()
@@ -135,7 +128,7 @@ class Engine(arcade.Window):
             starting_weapons=definition["starting_weapons"],
         )
         self.set_player(player)
-        self.current_character = character_key
+        self.progression_state.current_character = character_key
         self.state = "playing"
 
     def _reset_run_state(self):
@@ -143,11 +136,12 @@ class Engine(arcade.Window):
         self.enemies = arcade.SpriteList()
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
-        self.elapsed_time = 0.0
         self.paused = False
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.progression_system = ProgressionSystem(self.characters)
+        self.progression_state.elapsed_time = 0.0
 
     def start(self):
         """Start the game loop."""
@@ -193,9 +187,15 @@ class Engine(arcade.Window):
         if self.paused:
             return
 
-        self.elapsed_time += delta_time
+        self._update_gameplay_scene(delta_time)
 
-        self._update_unlocks()
+    def _update_gameplay_scene(self, delta_time: float) -> None:
+        player_alive = bool(self.player and self.player.health > 0)
+        self.progression_system.update(
+            self.progression_state,
+            delta_time,
+            player_alive=player_alive,
+        )
 
         # Handle Player Movement
         if self.player:
@@ -300,7 +300,7 @@ class Engine(arcade.Window):
             self.state = "menu"
 
     def _can_start_selected_character(self) -> bool:
-        return self.selected_character in self.unlocked_characters
+        return self.selected_character in self.progression_state.unlocked_characters
 
     def _draw_map_background(self) -> None:
         """Render the arena area with a solid fill and grid."""
@@ -377,7 +377,7 @@ class Engine(arcade.Window):
         definition = self.characters[key]
         rect = self.card_regions[key]
         is_selected = key == self.selected_character
-        unlocked = key in self.unlocked_characters
+        unlocked = key in self.progression_state.unlocked_characters
         border_color = definition["color"] if unlocked else (80, 80, 80)
         background = (40, 40, 50)
         arcade.draw_rectangle_filled(rect["x"], rect["y"], rect["w"], rect["h"], background)
@@ -423,7 +423,9 @@ class Engine(arcade.Window):
             requirement = "Survive 10:00" if req else "Unlocked"
             if req:
                 prereq_name = self.characters[req["character"]]["name"]
-                best_time = self.best_survival_times.get(req["character"], 0)
+                best_time = self.progression_state.best_survival_times.get(
+                    req["character"], 0
+                )
                 requirement = f"Survive 10:00 as {prereq_name}\nBest: {self._format_time_value(best_time)}"
             lock_text = arcade.Text(
                 requirement,
@@ -450,7 +452,7 @@ class Engine(arcade.Window):
         headline.draw()
 
         score_text = arcade.Text(
-            f"Survival Time: {self._format_time_value(self.last_score)}",
+            f"Survival Time: {self._format_time_value(self.progression_state.last_score)}",
             self.width / 2,
             self.height - 190,
             arcade.color.LIGHT_GRAY,
@@ -460,9 +462,9 @@ class Engine(arcade.Window):
         score_text.draw()
 
         progress_lines = [
-            f"Square best: {self._format_time_value(self.best_survival_times['square'])}",
-            f"Triangle best: {self._format_time_value(self.best_survival_times['triangle'])}",
-            f"Circle best: {self._format_time_value(self.best_survival_times['circle'])}",
+            f"Square best: {self._format_time_value(self.progression_state.best_survival_times['square'])}",
+            f"Triangle best: {self._format_time_value(self.progression_state.best_survival_times['triangle'])}",
+            f"Circle best: {self._format_time_value(self.progression_state.best_survival_times['circle'])}",
         ]
         for idx, line in enumerate(progress_lines):
             text = arcade.Text(
@@ -571,8 +573,8 @@ class Engine(arcade.Window):
         text.draw()
 
     def _format_elapsed_time(self) -> str:
-        minutes = int(self.elapsed_time) // 60
-        seconds = int(self.elapsed_time) % 60
+        minutes = int(self.progression_state.elapsed_time) // 60
+        seconds = int(self.progression_state.elapsed_time) % 60
         return f"{minutes:02d}:{seconds:02d}"
 
     def _format_time_value(self, seconds_value: float) -> str:
@@ -588,30 +590,11 @@ class Engine(arcade.Window):
         }
         return names.get(weapon_key, weapon_key)
 
-    def _record_survival_time(self):
-        if not self.current_character:
-            return
-        best = self.best_survival_times.get(self.current_character, 0.0)
-        self.best_survival_times[self.current_character] = max(best, self.last_score)
-
-    def _update_unlocks(self):
-        if self.current_character:
-            best = self.best_survival_times.get(self.current_character, 0.0)
-            if self.elapsed_time > best:
-                self.best_survival_times[self.current_character] = self.elapsed_time
-
-        if self.best_survival_times.get("square", 0.0) >= 600:
-            self.unlocked_characters.add("triangle")
-        if self.best_survival_times.get("triangle", 0.0) >= 600:
-            self.unlocked_characters.add("circle")
-
     def handle_game_over(self):
         if self.state != "playing":
             return
 
-        self.last_score = self.elapsed_time
-        self._record_survival_time()
-        self._update_unlocks()
+        self.progression_system.record_game_over(self.progression_state)
         self.state = "game_over"
 
         # Clear active sprites so the next run starts fresh
