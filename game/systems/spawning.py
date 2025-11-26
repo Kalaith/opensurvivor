@@ -67,6 +67,7 @@ class SpawningSystem:
         self.wave_message = ""
         self.elite_health_multiplier = 2.0
         self.elite_speed_multiplier = 1.15
+        self.scaled_elite_chance = 0.0
         self._update_wave_profile(force=True)
 
     def update(self, dt: float):
@@ -104,6 +105,7 @@ class SpawningSystem:
 
         enemy = enemy_class(x, y)
         enemy.target = self.engine.player
+        self._scale_enemy(enemy)
         self._apply_elite_modifiers(enemy)
         self.engine.enemies.append(enemy)
         self.engine.all_sprites.append(enemy)
@@ -116,8 +118,7 @@ class SpawningSystem:
         return random.choices(population=population, weights=weights)[0]
 
     def _apply_elite_modifiers(self, enemy):
-        chance = 0.0 if not self.current_profile else self.current_profile.get("elite_chance", 0.0)
-        if random.random() > chance:
+        if random.random() > self.scaled_elite_chance:
             return
 
         enemy.health = int(enemy.health * self.elite_health_multiplier)
@@ -131,6 +132,7 @@ class SpawningSystem:
 
     def _update_wave_profile(self, force: bool = False):
         elapsed = getattr(self.engine, "elapsed_time", 0.0)
+        minutes_elapsed = elapsed / 60.0
         new_index = self.current_wave_index
         for idx, profile in enumerate(self.wave_profiles):
             if elapsed >= profile["start"]:
@@ -138,11 +140,11 @@ class SpawningSystem:
         if force or new_index != self.current_wave_index:
             self.current_wave_index = new_index
             self.current_profile = self.wave_profiles[new_index]
-            self.spawn_rate = self.current_profile["spawn_rate"]
-            self.max_enemies = self.current_profile.get("max_enemies", self.max_enemies)
             self.wave_message = f"Wave {self.current_wave_index + 1}: {self.current_profile.get('label', 'Unknown')}"
             self.wave_notification_timer = 3.0
             print(self.wave_message)
+
+        self._apply_difficulty_scaling(minutes_elapsed)
 
     def get_wave_status(self) -> str:
         if not self.current_profile:
@@ -155,3 +157,36 @@ class SpawningSystem:
         if self.wave_notification_timer <= 0:
             return None
         return self.wave_message
+
+    def _apply_difficulty_scaling(self, minutes_elapsed: float) -> None:
+        """Continuously tighten spawn cadence and enemy strength."""
+        if not self.current_profile:
+            return
+
+        base_spawn_rate = self.current_profile["spawn_rate"]
+        # Shrink spawn intervals exponentially so late-game floods the arena.
+        spawn_rate_multiplier = 0.85 ** minutes_elapsed
+        self.spawn_rate = max(0.05, base_spawn_rate * spawn_rate_multiplier)
+
+        base_max = self.current_profile.get("max_enemies", self.max_enemies)
+        self.max_enemies = base_max + int(minutes_elapsed * 20)
+
+        # Make elites both more common and vastly stronger over time.
+        base_elite_chance = self.current_profile.get("elite_chance", 0.0)
+        self.scaled_elite_chance = min(0.95, base_elite_chance + minutes_elapsed * 0.02)
+        self.elite_health_multiplier = 2.0 + minutes_elapsed * 1.5
+        self.elite_speed_multiplier = 1.15 + minutes_elapsed * 0.05
+
+    def _scale_enemy(self, enemy: Enemy) -> None:
+        """Ramp core stats with survival time to ensure eventual defeat."""
+        elapsed = getattr(self.engine, "elapsed_time", 0.0)
+        minutes_elapsed = elapsed / 60.0
+
+        health_multiplier = 1.0 + minutes_elapsed * 3.0
+        speed_multiplier = 1.0 + minutes_elapsed * 0.12
+        damage_multiplier = 1.0 + minutes_elapsed * 4.0
+
+        enemy.health = max(1, int(enemy.health * health_multiplier))
+        enemy.speed *= speed_multiplier
+        if hasattr(enemy, "damage"):
+            enemy.damage = int(enemy.damage * damage_multiplier)
