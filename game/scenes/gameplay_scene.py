@@ -91,7 +91,7 @@ class GameplayScene(BaseScene):
             return
 
         collided = False
-        if self.engine.obstacles:
+        if sprite is self.engine.player and self.engine.obstacles:
             collided = bool(arcade.check_for_collision_with_list(sprite, self.engine.obstacles))
         if collided:
             sprite.center_x, sprite.center_y = previous_pos
