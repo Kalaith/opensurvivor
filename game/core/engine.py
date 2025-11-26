@@ -1,5 +1,16 @@
 from pathlib import Path
+
 import arcade
+
+from .audio import SoundManager
+from .input import InputHandler
+from ..content.characters.player import Player
+from ..content.map import MapDefinition
+from ..scenes import GameOverScene, GameplayScene, MenuScene
+from ..scenes.base import BaseScene
+from ..systems.combat import CombatSystem
+from ..systems.leveling import LevelingSystem
+from ..systems.spawning import SpawningSystem
 # TODO(engine-extraction): Rendering and window lifecycle currently depend directly
 # on the arcade.Window base class; refactors will need to abstract drawing away
 # from this inheritance.
@@ -64,6 +75,7 @@ class Engine(arcade.Window):
         # Game flow and progression
         self.elapsed_time = 0.0
 
+        # Game flow and progression
         # TODO(engine-extraction): State transitions bucket — menu/playing/game_over
         # modes drive update/draw/input pathways.
         self.state = "menu"
@@ -94,6 +106,13 @@ class Engine(arcade.Window):
 
         # Set background color
         arcade.set_background_color((30, 30, 30))
+
+        # Scenes
+        self.current_scene: BaseScene | None = None
+        self.menu_scene = MenuScene(self)
+        self.game_over_scene = GameOverScene(self)
+
+        self.change_scene(self.menu_scene)
 
     def _setup_characters(self) -> None:
         self.characters = {
@@ -129,6 +148,19 @@ class Engine(arcade.Window):
             center_x = start_x + idx * (card_width + margin)
             self.card_regions[key] = {"x": center_x, "y": center_y, "w": card_width, "h": card_height}
 
+    def change_scene(self, scene: BaseScene) -> None:
+        if self.current_scene is scene:
+            return
+
+        if self.current_scene:
+            self.current_scene.on_exit()
+
+        self.current_scene = scene
+        self.current_scene.on_enter()
+
+    def return_to_menu(self) -> None:
+        self.change_scene(self.menu_scene)
+
     def set_player(self, player):
         self.player = player
         self.all_sprites.append(player)
@@ -148,6 +180,9 @@ class Engine(arcade.Window):
             starting_weapons=definition["starting_weapons"],
         )
         self.set_player(player)
+        self.current_character = character_key
+        gameplay_scene = GameplayScene(self)
+        self.change_scene(gameplay_scene)
         self.progression_system.start_run(
             self.progression_state, character_key=character_key
         )
@@ -169,9 +204,16 @@ class Engine(arcade.Window):
         arcade.run()
 
     def on_draw(self):
-        """Render the game."""
+        """Render the active scene."""
         self.clear()
 
+        if self.current_scene:
+            self.current_scene.render()
+
+    def on_update(self, delta_time: float):
+        """Update the active scene."""
+        if self.current_scene:
+            self.current_scene.update(delta_time)
         if self.state == "playing":
             self.gameplay_scene.draw()
             # TODO(engine-extraction): Rendering bucket — map background, obstacles,
@@ -256,23 +298,42 @@ class Engine(arcade.Window):
             self._apply_bounds_and_collisions(sprite, previous_pos)
 
     def on_key_press(self, key, modifiers):
-        if self.state != "playing":
-            return
-        if self.leveling_system.handle_input(key):
-            return
-        self.input_handler.on_key_press(key, modifiers)
+        if self.current_scene:
+            self.current_scene.handle_key_press(key, modifiers)
 
     def on_key_release(self, key, modifiers):
-        if self.state != "playing":
-            return
-        self.input_handler.on_key_release(key, modifiers)
+        if self.current_scene:
+            self.current_scene.handle_key_release(key, modifiers)
 
     def on_mouse_motion(self, x, y, dx, dy):
-        if self.state != "playing":
-            return
-        self.leveling_system.handle_mouse_motion(x, y, dx, dy)
+        if self.current_scene:
+            self.current_scene.handle_mouse_motion(x, y, dx, dy)
 
     def on_mouse_press(self, x, y, button, modifiers):
+        if self.current_scene:
+            self.current_scene.handle_mouse_press(x, y, button, modifiers)
+
+    def draw_bar(self, x, y, width, height, ratio, fill_color, background_color, label):
+        clamped_ratio = max(0.0, min(1.0, ratio))
+        # x, y are center coordinates. Convert to bottom-left for lbwh.
+        arcade.draw_lbwh_rectangle_filled(x - width / 2, y - height / 2, width, height, background_color)
+
+        filled_width = width * clamped_ratio
+        left = x - width / 2
+        if filled_width > 0:
+            arcade.draw_lbwh_rectangle_filled(
+                left, y - height / 2, filled_width, height, fill_color
+            )
+
+        text = arcade.Text(label, left + 6, y - height / 2 + 2, arcade.color.WHITE, 12)
+        text.draw()
+
+    def format_elapsed_time(self) -> str:
+        minutes = int(self.elapsed_time) // 60
+        seconds = int(self.elapsed_time) % 60
+        return f"{minutes:02d}:{seconds:02d}"
+
+    def format_time_value(self, seconds_value: float) -> str:
         if self.state == "menu":
             self._handle_menu_click(x, y)
             return
@@ -449,7 +510,7 @@ class Engine(arcade.Window):
         seconds = int(seconds_value) % 60
         return f"{minutes:02d}:{seconds:02d}"
 
-    def _weapon_label(self, weapon_key: str) -> str:
+    def weapon_label(self, weapon_key: str) -> str:
         names = {
             "projectile": "Straight Shot",
             "orbitals": "Spinning Blades",
@@ -457,12 +518,13 @@ class Engine(arcade.Window):
         }
         return names.get(weapon_key, weapon_key)
 
-    def _record_survival_time(self):
+    def record_survival_time(self):
         if not self.current_character:
             return
         best = self.best_survival_times.get(self.current_character, 0.0)
         self.best_survival_times[self.current_character] = max(best, self.last_score)
 
+    def update_unlocks(self):
     def _update_unlocks(self):
         # TODO(engine-extraction): Progression/unlocks bucket — survival time ties
         # directly into character availability; isolate from frame update loop.
@@ -477,6 +539,11 @@ class Engine(arcade.Window):
             self.unlocked_characters.add("circle")
 
     def handle_game_over(self):
+        self.last_score = self.elapsed_time
+        self.record_survival_time()
+        self.update_unlocks()
+
+        self.change_scene(self.game_over_scene)
         if self.state != "playing":
             return
 
