@@ -26,7 +26,7 @@ class CollisionSystem:
                 sprite, previous_pos, obstacles=obstacles, game_map=world.map
             )
 
-        self._resolve_enemy_collisions(world, previous_positions)
+        self._resolve_enemy_collisions(world)
 
     def apply_bounds_and_collisions(self, sprite, previous_pos, obstacles, game_map):
         """Clamp sprites to map bounds and prevent passing through obstacles."""
@@ -63,7 +63,7 @@ class CollisionSystem:
         movers.extend(getattr(world, "enemies", []))
         return movers
 
-    def _resolve_enemy_collisions(self, world, previous_positions):
+    def _resolve_enemy_collisions(self, world):
         """Separate enemies softly so they pack toward the player without clumping."""
 
         enemies = getattr(world, "enemies", [])
@@ -74,15 +74,38 @@ class CollisionSystem:
         cell_size = self._estimate_cell_size(radii)
         buckets = self._bucket_enemies(enemies, cell_size)
 
-        neighbor_offsets = (-1, 0, 1)
-        for enemy in enemies:
-            cell_x, cell_y = self._cell_for(enemy, cell_size)
-            for dx in neighbor_offsets:
-                for dy in neighbor_offsets:
-                    for other in buckets.get((cell_x + dx, cell_y + dy), []):
-                        if enemy is other or id(enemy) >= id(other):
-                            continue
-                        self._separate_enemies(enemy, other, radii)
+        # Only process each pair of neighboring cells once to reduce redundant
+        # comparisons when the horde grows large.
+        neighbor_offsets = ((0, 0), (1, 0), (0, 1), (1, 1), (1, -1))
+        moved = set()
+
+        for (cell_x, cell_y), cell_enemies in buckets.items():
+            for dx, dy in neighbor_offsets:
+                other_bucket = buckets.get((cell_x + dx, cell_y + dy))
+                if not other_bucket:
+                    continue
+
+                if dx == 0 and dy == 0:
+                    # Only run intra-cell checks once per cell.
+                    enemies_to_check = (
+                        (cell_enemies[i], cell_enemies[j])
+                        for i in range(len(cell_enemies))
+                        for j in range(i + 1, len(cell_enemies))
+                    )
+                else:
+                    enemies_to_check = (
+                        (enemy, other)
+                        for enemy in cell_enemies
+                        for other in other_bucket
+                    )
+
+                for enemy, other in enemies_to_check:
+                    if self._separate_enemies(enemy, other, radii):
+                        moved.add(enemy)
+                        moved.add(other)
+
+        for enemy in moved:
+            self.clamp_to_map(enemy, world.map)
 
     def _cell_for(self, sprite, cell_size: int) -> tuple[int, int]:
         return int(sprite.center_x // cell_size), int(sprite.center_y // cell_size)
@@ -107,7 +130,7 @@ class CollisionSystem:
             )
         return radii
 
-    def _separate_enemies(self, a, b, radii=None) -> None:
+    def _separate_enemies(self, a, b, radii=None) -> bool:
         radius_a = (radii or {}).get(
             a, getattr(a, "collision_radius", min(a.width, a.height) * 0.5)
         )
@@ -126,7 +149,7 @@ class CollisionSystem:
             dx, dy, dist_sq = 1.0, 0.0, 1.0
 
         if dist_sq >= desired_distance * desired_distance:
-            return
+            return False
 
         dist = math.sqrt(dist_sq)
         overlap = desired_distance - dist
@@ -137,6 +160,7 @@ class CollisionSystem:
         a.center_y -= ny * push
         b.center_x += nx * push
         b.center_y += ny * push
+        return True
 
     def _revert_to_previous(self, sprite, previous_positions):
         if sprite not in previous_positions:
