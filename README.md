@@ -34,6 +34,16 @@ python -m game.main
 ```
 The window opens with the player centered on screen, and the engine updates spawning, combat, and leveling systems each frame.
 
+## Testing hotkeys
+Hold **CTRL+SHIFT** to access fast-forward commands that make QA easier:
+
+- **F10**: Add 10 minutes to the current run timer (only while playing).
+- **1**: Mark Square as having survived 10 minutes.
+- **2**: Mark Triangle as having survived 10 minutes.
+- **3**: Mark Circle as having survived 10 minutes.
+
+Marking a character's survival time updates unlocks immediately, allowing you to skip the 10-minute requirements without playing through a full run.
+
 ## Using the GDD helper
 To inspect the sections defined in `GDD.md` via the provided parser:
 ```bash

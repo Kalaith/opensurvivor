@@ -76,6 +76,22 @@ arcade_stub.draw_lrtb_rectangle_filled = _noop
 arcade_stub.draw_line = _noop
 arcade_stub.run = _noop
 arcade_stub.color = types.SimpleNamespace(YELLOW=(255, 255, 0), WHITE=(255, 255, 255))
+arcade_stub.key = types.SimpleNamespace(
+    W=1,
+    A=2,
+    S=3,
+    D=4,
+    UP=5,
+    DOWN=6,
+    LEFT=7,
+    RIGHT=8,
+    F10=9,
+    KEY_1=10,
+    KEY_2=11,
+    KEY_3=12,
+    MOD_CTRL=1 << 8,
+    MOD_SHIFT=1 << 9,
+)
 
 sys.modules["arcade"] = arcade_stub
 
