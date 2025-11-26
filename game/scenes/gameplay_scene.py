@@ -12,6 +12,39 @@ if TYPE_CHECKING:
 class GameplayScene(BaseScene):
     def __init__(self, engine: "Engine"):
         self.engine = engine
+        self._hud_padding = 20
+        self._bar_width = 260
+        self._bar_height = 18
+        self._time_text = arcade.Text(
+            "",
+            self._hud_padding,
+            self._hud_padding,
+            arcade.color.WHITE,
+            16,
+        )
+        self._info_text = arcade.Text(
+            "",
+            self._hud_padding,
+            self._hud_padding + 22,
+            arcade.color.LIGHT_GRAY,
+            14,
+        )
+        self._banner_text = arcade.Text(
+            "",
+            self.engine.width / 2,
+            self.engine.height - 40,
+            arcade.color.YELLOW,
+            18,
+            anchor_x="center",
+        )
+        self._game_over_text = arcade.Text(
+            "Game Over",
+            self.engine.width / 2,
+            self.engine.height - self._hud_padding - 30,
+            arcade.color.WHITE,
+            28,
+            anchor_x="center",
+        )
 
     def on_enter(self) -> None:
         self.engine.paused = False
@@ -49,15 +82,8 @@ class GameplayScene(BaseScene):
 
         notice = self.engine.spawning_system.get_wave_notification()
         if notice:
-            banner = arcade.Text(
-                notice,
-                self.engine.width / 2,
-                self.engine.height - 40,
-                arcade.color.YELLOW,
-                18,
-                anchor_x="center",
-            )
-            banner.draw()
+            self._banner_text.text = notice
+            self._banner_text.draw()
 
         self.engine.leveling_system.draw()
 
@@ -93,26 +119,20 @@ class GameplayScene(BaseScene):
             arcade.draw_line(0, y, self.engine.map.width, y, grid_color, 1)
 
     def _draw_hud(self):
-        padding = 20
-        bar_width = 260
-        bar_height = 18
-        time_text = arcade.Text(
-            f"Survival: {self.engine.format_elapsed_time()}",
-            padding,
-            padding,
-            arcade.color.WHITE,
-            16,
-        )
+        padding = self._hud_padding
+        bar_width = self._bar_width
+        bar_height = self._bar_height
 
+        self._time_text.text = f"Survival: {self.engine.format_elapsed_time()}"
+        self._time_text.anchor_x = "left"
+        self._time_text.center_x = padding
+        self._time_text.center_y = padding
+        self._info_text.anchor_x = "left"
+        self._info_text.center_x = padding
+        self._info_text.center_y = padding + 22
         enemy_count = len(self.engine.enemies)
         fps_value = arcade.get_fps() or 0.0
-        info_text = arcade.Text(
-            f"Enemies: {enemy_count}    FPS: {fps_value:.0f}",
-            padding,
-            padding + 22,
-            arcade.color.LIGHT_GRAY,
-            14,
-        )
+        self._info_text.text = f"Enemies: {enemy_count}    FPS: {fps_value:.0f}"
 
         if self.engine.player and self.engine.player.health > 0:
             hp_ratio = (
@@ -149,21 +169,13 @@ class GameplayScene(BaseScene):
                 f"XP {self.engine.player.xp:.0f}/{self.engine.player.xp_to_next_level}",
             )
 
-            time_text.draw()
-            info_text.draw()
+            self._time_text.draw()
+            self._info_text.draw()
         else:
-            game_over = arcade.Text(
-                "Game Over",
-                self.engine.width / 2,
-                self.engine.height - padding - 30,
-                arcade.color.WHITE,
-                28,
-                anchor_x="center",
-            )
-            game_over.draw()
+            self._game_over_text.draw()
 
-            time_text.center_x = self.engine.width / 2
-            time_text.center_y = self.engine.height - padding - 70
-            time_text.anchor_x = "center"
-            time_text.draw()
-            info_text.draw()
+            self._time_text.center_x = self.engine.width / 2
+            self._time_text.center_y = self.engine.height - padding - 70
+            self._time_text.anchor_x = "center"
+            self._time_text.draw()
+            self._info_text.draw()

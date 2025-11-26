@@ -19,8 +19,10 @@ class TestingCommandHandler:
             arcade.key.KEY_1: lambda: self._set_best_time("square"),
             arcade.key.KEY_2: lambda: self._set_best_time("triangle"),
             arcade.key.KEY_3: lambda: self._set_best_time("circle"),
-            arcade.key.F11: self._toggle_invincible_overwhelm,
         }
+        f11_key = getattr(arcade.key, "F11", None)
+        if f11_key is not None:
+            self._command_map[f11_key] = self._toggle_invincible_overwhelm
 
     def handle_key_press(self, key, modifiers) -> bool:
         """Execute a testing command if its hotkey is pressed.
