@@ -140,6 +140,16 @@ class GameplayScene(BaseScene):
             16,
         )
 
+        enemy_count = len(self.engine.enemies)
+        fps_value = arcade.get_fps() or 0.0
+        info_text = arcade.Text(
+            f"Enemies: {enemy_count}    FPS: {fps_value:.0f}",
+            padding,
+            padding + 22,
+            arcade.color.LIGHT_GRAY,
+            14,
+        )
+
         if self.engine.player and self.engine.player.health > 0:
             hp_ratio = (
                 self.engine.player.health / self.engine.player.max_health if self.engine.player.max_health else 0
@@ -176,6 +186,7 @@ class GameplayScene(BaseScene):
             )
 
             time_text.draw()
+            info_text.draw()
         else:
             game_over = arcade.Text(
                 "Game Over",
@@ -191,3 +202,4 @@ class GameplayScene(BaseScene):
             time_text.center_y = self.engine.height - padding - 70
             time_text.anchor_x = "center"
             time_text.draw()
+            info_text.draw()
