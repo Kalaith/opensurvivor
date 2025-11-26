@@ -4,18 +4,19 @@ import types
 import arcade
 
 from game.core.engine import Engine
+from game.systems.collision import CollisionSystem
 from game.systems.spawning import SpawningSystem
 from game.content.characters.enemy import ExploderEnemy
 
 
 def _build_engine_stub():
-    engine = Engine.__new__(Engine)
-    engine.map = types.SimpleNamespace(width=100, height=80)
-    return engine
+    map_stub = types.SimpleNamespace(width=100, height=80)
+    return map_stub
 
 
 def test_clamp_to_map_limits_sprite_to_bounds():
-    engine = _build_engine_stub()
+    map_stub = _build_engine_stub()
+    collision_system = CollisionSystem()
     sprite = types.SimpleNamespace(
         width=20,
         height=10,
@@ -25,17 +26,18 @@ def test_clamp_to_map_limits_sprite_to_bounds():
         change_y=-3.0,
     )
 
-    engine._clamp_to_map(sprite)
+    collision_system.clamp_to_map(sprite, map_stub)
 
-    assert sprite.center_x == engine.map.width - sprite.width / 2
+    assert sprite.center_x == map_stub.width - sprite.width / 2
     assert sprite.center_y == sprite.height / 2
     assert sprite.change_x == 0
     assert sprite.change_y == 0
 
 
 def test_apply_bounds_resets_position_on_collision(monkeypatch):
-    engine = _build_engine_stub()
-    engine.obstacles = object()
+    map_stub = _build_engine_stub()
+    collision_system = CollisionSystem()
+    obstacles = object()
 
     sprite = types.SimpleNamespace(
         center_x=20.0,
@@ -51,9 +53,11 @@ def test_apply_bounds_resets_position_on_collision(monkeypatch):
         "check_for_collision_with_list",
         lambda *_args, **_kwargs: [True],
     )
-    engine._clamp_to_map = lambda _sprite: None
+    collision_system.clamp_to_map = lambda _sprite, _map: None
 
-    engine._apply_bounds_and_collisions(sprite, (10.0, 10.0))
+    collision_system.apply_bounds_and_collisions(
+        sprite, (10.0, 10.0), obstacles=obstacles, game_map=map_stub
+    )
 
     assert (sprite.center_x, sprite.center_y) == (10.0, 10.0)
     assert sprite.change_x == 0

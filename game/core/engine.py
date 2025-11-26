@@ -7,6 +7,7 @@ from ..content.characters.player import Player
 from ..systems.spawning import SpawningSystem
 from ..systems.combat import CombatSystem
 from ..systems.leveling import LevelingSystem
+from ..systems.collision import CollisionSystem
 
 class Engine(arcade.Window):
     """
@@ -78,6 +79,7 @@ class Engine(arcade.Window):
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.collision_system = CollisionSystem()
 
         # Set background color
         arcade.set_background_color((30, 30, 30))
@@ -148,6 +150,7 @@ class Engine(arcade.Window):
         self.spawning_system = SpawningSystem(self)
         self.combat_system = CombatSystem(self)
         self.leveling_system = LevelingSystem(self)
+        self.collision_system = CollisionSystem()
 
     def start(self):
         """Start the game loop."""
@@ -208,20 +211,7 @@ class Engine(arcade.Window):
         self.spawning_system.update(delta_time)
         self.combat_system.update(delta_time)
         self.leveling_system.update(delta_time)
-
-        # Update all sprites (this applies change_x/change_y to positions)
-        movers = []
-        if self.player:
-            movers.append(self.player)
-        movers.extend(self.enemies)
-        previous_positions = [
-            (sprite.center_x, sprite.center_y) for sprite in movers
-        ]
-
-        self.all_sprites.update()
-
-        for sprite, previous_pos in zip(movers, previous_positions):
-            self._apply_bounds_and_collisions(sprite, previous_pos)
+        self.collision_system.update(self, delta_time)
 
     def on_key_press(self, key, modifiers):
         if self.state != "playing":
@@ -249,33 +239,6 @@ class Engine(arcade.Window):
             return
         if self.leveling_system.handle_mouse_press(x, y, button, modifiers):
             return
-    def _apply_bounds_and_collisions(self, sprite: arcade.Sprite, previous_pos):
-        """Clamp sprites to the map bounds and prevent passing through obstacles."""
-        if previous_pos is None:
-            return
-
-        collided = False
-        if self.obstacles:
-            collided = bool(arcade.check_for_collision_with_list(sprite, self.obstacles))
-        if collided:
-            sprite.center_x, sprite.center_y = previous_pos
-            sprite.change_x = 0
-            sprite.change_y = 0
-
-        self._clamp_to_map(sprite)
-
-    def _clamp_to_map(self, sprite: arcade.Sprite) -> None:
-        """Keep a sprite inside the map rectangle."""
-        half_w = sprite.width / 2
-        half_h = sprite.height / 2
-        clamped_x = min(max(sprite.center_x, half_w), self.map.width - half_w)
-        clamped_y = min(max(sprite.center_y, half_h), self.map.height - half_h)
-
-        if clamped_x != sprite.center_x or clamped_y != sprite.center_y:
-            sprite.center_x = clamped_x
-            sprite.center_y = clamped_y
-            sprite.change_x = 0
-            sprite.change_y = 0
 
     def _handle_menu_click(self, x: float, y: float) -> None:
         for key, rect in self.card_regions.items():
