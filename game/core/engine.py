@@ -6,6 +6,7 @@ import arcade
 
 from .audio import SoundManager
 from .input import InputHandler
+from .testing_commands import TestingCommandHandler
 from ..content.characters.player import Player
 from ..content.map import MapDefinition
 from ..scenes import BaseScene, GameOverScene, GameplayScene, MenuScene
@@ -33,6 +34,7 @@ class Engine(arcade.Window):
         super().__init__(int(self.map.width), int(self.map.height), title)
 
         self.input_handler = InputHandler()
+        self.testing_commands = TestingCommandHandler(self)
 
         sfx_path = Path(__file__).resolve().parent.parent / "content" / "sfx"
         self.sound_manager = SoundManager(
@@ -216,6 +218,8 @@ class Engine(arcade.Window):
             self.current_scene.update(delta_time)
 
     def on_key_press(self, key, modifiers) -> None:
+        if self.testing_commands.handle_key_press(key, modifiers):
+            return
         if self.current_scene:
             self.current_scene.handle_key_press(key, modifiers)
 
