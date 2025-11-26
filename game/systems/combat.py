@@ -108,7 +108,7 @@ class CombatSystem:
 
                 if player.health <= 0:
                     print("Player defeated!")
-                    self.engine.close()
+                    self.engine.handle_game_over()
                     break
 
         for enemy in enemies_to_remove:

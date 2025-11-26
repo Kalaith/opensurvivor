@@ -2,9 +2,10 @@ from ...core.entity import Entity
 from typing import Tuple
 
 class Player(Entity):
-    def __init__(self, x: float, y: float):
-        # Blue square for player
-        super().__init__(x, y, 32, 32, (0, 128, 255))
+    def __init__(self, x: float, y: float, color: Tuple[int, int, int] | None = None, starting_weapons: set[str] | None = None):
+        # Character appearance can be customized via color
+        player_color = color or (0, 128, 255)
+        super().__init__(x, y, 32, 32, player_color)
         self.speed = 200.0  # Pixels per second
 
         # Stats
@@ -27,7 +28,7 @@ class Player(Entity):
         self._regen_timer = 0.0
 
         # Weapons
-        self.unlocked_weapons = {"projectile"}
+        self.unlocked_weapons = set(starting_weapons) if starting_weapons else {"projectile"}
 
     def unlock_weapon(self, weapon_name: str):
         self.unlocked_weapons.add(weapon_name)
