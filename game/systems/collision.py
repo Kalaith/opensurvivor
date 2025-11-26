@@ -1,5 +1,6 @@
 import arcade
 import math
+from collections import defaultdict
 
 
 class CollisionSystem:
@@ -69,13 +70,50 @@ class CollisionSystem:
         if len(enemies) < 2:
             return
 
-        for idx, enemy in enumerate(enemies):
-            for other in enemies[idx + 1 :]:
-                self._separate_enemies(enemy, other)
+        radii = self._cache_radii(enemies)
+        cell_size = self._estimate_cell_size(radii)
+        buckets = self._bucket_enemies(enemies, cell_size)
 
-    def _separate_enemies(self, a, b) -> None:
-        radius_a = getattr(a, "collision_radius", min(a.width, a.height) * 0.5)
-        radius_b = getattr(b, "collision_radius", min(b.width, b.height) * 0.5)
+        neighbor_offsets = (-1, 0, 1)
+        for enemy in enemies:
+            cell_x, cell_y = self._cell_for(enemy, cell_size)
+            for dx in neighbor_offsets:
+                for dy in neighbor_offsets:
+                    for other in buckets.get((cell_x + dx, cell_y + dy), []):
+                        if enemy is other or id(enemy) >= id(other):
+                            continue
+                        self._separate_enemies(enemy, other, radii)
+
+    def _cell_for(self, sprite, cell_size: int) -> tuple[int, int]:
+        return int(sprite.center_x // cell_size), int(sprite.center_y // cell_size)
+
+    def _bucket_enemies(self, enemies, cell_size: int):
+        buckets = defaultdict(list)
+        for enemy in enemies:
+            buckets[self._cell_for(enemy, cell_size)].append(enemy)
+        return buckets
+
+    def _estimate_cell_size(self, radii: dict) -> int:
+        if not radii:
+            return 64
+        max_diameter = max(radii.values()) * 2
+        return max(32, int(max_diameter * 1.2))
+
+    def _cache_radii(self, enemies) -> dict:
+        radii = {}
+        for enemy in enemies:
+            radii[enemy] = getattr(
+                enemy, "collision_radius", min(enemy.width, enemy.height) * 0.5
+            )
+        return radii
+
+    def _separate_enemies(self, a, b, radii=None) -> None:
+        radius_a = (radii or {}).get(
+            a, getattr(a, "collision_radius", min(a.width, a.height) * 0.5)
+        )
+        radius_b = (radii or {}).get(
+            b, getattr(b, "collision_radius", min(b.width, b.height) * 0.5)
+        )
 
         desired_distance = (radius_a + radius_b) * 1.15  # Leave a small buffer between bodies
 
