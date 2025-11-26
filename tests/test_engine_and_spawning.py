@@ -1,10 +1,11 @@
-import types
 import random
+import types
 
 import arcade
 
 from game.core.engine import Engine
 from game.systems.spawning import SpawningSystem
+from game.content.characters.enemy import ExploderEnemy
 
 
 def _build_engine_stub():
@@ -103,3 +104,51 @@ def test_spawn_enemy_respects_wave_weights(monkeypatch):
     assert isinstance(engine.enemies[0], DummyEnemy)
     assert engine.enemies[0].center_y == engine.map.height + 50
     assert len(chosen_types) == 1
+
+
+def test_exploder_enemy_triggers_game_over_and_cleanup():
+    # Construct a minimal engine with the necessary state but without running Engine.__init__.
+    engine = Engine.__new__(Engine)
+    engine.state = "playing"
+    engine.elapsed_time = 12.5
+    engine.current_character = "square"
+    engine.last_score = 0.0
+    engine.best_survival_times = {"square": 5.0, "triangle": 0.0, "circle": 0.0}
+    engine.unlocked_characters = set()
+    engine.all_sprites = [1]
+    engine.enemies = []
+    engine.projectiles = [1]
+    engine.items = [1]
+    engine.sound_manager = types.SimpleNamespace(play=lambda *_args, **_kwargs: None)
+
+    class DummyPlayer:
+        def __init__(self):
+            self.center_x = 0
+            self.center_y = 0
+            self.health = 1
+            self.max_health = 1
+
+        def take_damage(self, amount):
+            self.health = max(0, self.health - amount)
+
+    player = DummyPlayer()
+    engine.player = player
+
+    # Bind the real handle_game_over method to the stub engine instance.
+    engine.handle_game_over = types.MethodType(Engine.handle_game_over, engine)
+
+    enemy = ExploderEnemy.__new__(ExploderEnemy)
+    enemy.center_x = 0
+    enemy.center_y = 0
+    enemy.explosion_radius = 10
+    enemy.explosion_damage = 1
+
+    enemy.on_death(engine)
+
+    assert engine.state == "game_over"
+    assert engine.last_score == engine.elapsed_time
+    assert engine.best_survival_times["square"] == engine.elapsed_time
+    assert engine.player is None
+    assert len(engine.all_sprites) == 0
+    assert len(engine.projectiles) == 0
+    assert len(engine.items) == 0
