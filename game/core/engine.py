@@ -182,8 +182,12 @@ class Engine(arcade.Window):
 
         self.progression_system.record_game_over(self.progression_state)
         self.state = "game_over"
-        if getattr(self, "game_over_scene", None):
-            self.change_scene(self.game_over_scene)
+
+        # In tests, the engine can be partially constructed without scenes; guard
+        # against missing attributes so cleanup still completes.
+        game_over_scene = getattr(self, "game_over_scene", None)
+        if game_over_scene:
+            self.change_scene(game_over_scene)
 
         # Clear active sprites so the next run starts fresh
         self.all_sprites = arcade.SpriteList()
