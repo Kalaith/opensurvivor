@@ -33,6 +33,8 @@ class Engine(arcade.Window):
 
         super().__init__(int(self.map.width), int(self.map.height), title)
 
+        arcade.enable_timings()
+
         self.input_handler = InputHandler()
         self.testing_commands = TestingCommandHandler(self)
 

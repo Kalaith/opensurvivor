@@ -8,7 +8,7 @@ class SpawningSystem:
         self.wave_profiles = [
             {
                 "start": 0,
-                "spawn_rate": 2.5,
+                "spawn_rate": 1.5,
                 "weights": [
                     (Enemy, 0.7),
                     (SplittingEnemy, 0.15),
