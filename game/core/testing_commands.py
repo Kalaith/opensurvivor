@@ -19,6 +19,7 @@ class TestingCommandHandler:
             arcade.key.KEY_1: lambda: self._set_best_time("square"),
             arcade.key.KEY_2: lambda: self._set_best_time("triangle"),
             arcade.key.KEY_3: lambda: self._set_best_time("circle"),
+            arcade.key.F11: self._toggle_invincible_overwhelm,
         }
 
     def handle_key_press(self, key, modifiers) -> bool:
@@ -57,3 +58,18 @@ class TestingCommandHandler:
 
         best_times[character_key] = 600.0
         self.engine.progression_system.unlock_rewards(self.engine.progression_state)
+
+    def _toggle_invincible_overwhelm(self) -> None:
+        """Toggle player invincibility and crank spawns for stress testing."""
+
+        if self.engine.state != "playing" or not getattr(self.engine, "player", None):
+            return
+
+        player = self.engine.player
+        player.invincible = not player.invincible
+        print(f"Invincibility {'ENABLED' if player.invincible else 'DISABLED'}")
+
+        if player.invincible and getattr(self.engine, "spawning_system", None):
+            self.engine.spawning_system.overwhelm_mode = True
+        elif getattr(self.engine, "spawning_system", None):
+            self.engine.spawning_system.overwhelm_mode = False

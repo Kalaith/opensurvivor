@@ -12,6 +12,8 @@ class Enemy(Entity):
         self.target = None
         self.health = 1
         self.damage = 10
+        # Small circular collider used exclusively for enemy-on-enemy spacing.
+        self.collision_radius = min(width, height) * 0.35
 
     def take_damage(self, amount: int, engine) -> bool:
         """Apply damage and return True if the enemy died."""
