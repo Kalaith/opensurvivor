@@ -25,22 +25,26 @@ class CombatSystem:
                 enemy.update_target(dt)
 
         # Auto-attack
-        self.attack_timer -= dt
-        if self.attack_timer <= 0:
-            self.attack_nearest_enemy()
-            self.attack_timer = self.get_attack_cooldown()
+        player = self.engine.player
+        if player and player.has_weapon("projectile"):
+            self.attack_timer -= dt
+            if self.attack_timer <= 0:
+                self.attack_nearest_enemy()
+                self.attack_timer = self.get_attack_cooldown()
 
         # Orbiting blades weapon
-        self.orbit_timer -= dt
-        if self.orbit_timer <= 0:
-            self.spawn_orbitals()
-            self.orbit_timer = self.orbit_cooldown
+        if player and player.has_weapon("orbitals"):
+            self.orbit_timer -= dt
+            if self.orbit_timer <= 0:
+                self.spawn_orbitals()
+                self.orbit_timer = self.orbit_cooldown
 
         # Four-direction burst weapon
-        self.cardinal_timer -= dt
-        if self.cardinal_timer <= 0:
-            self.fire_cardinal_burst()
-            self.cardinal_timer = self.cardinal_cooldown
+        if player and player.has_weapon("cardinal"):
+            self.cardinal_timer -= dt
+            if self.cardinal_timer <= 0:
+                self.fire_cardinal_burst()
+                self.cardinal_timer = self.cardinal_cooldown
 
         # Collisions - Projectiles hit Enemies
         # Collect sprites to remove to avoid modifying lists during iteration

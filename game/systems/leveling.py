@@ -1,7 +1,7 @@
 import arcade
 import random
 from dataclasses import dataclass
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 
 @dataclass
@@ -11,6 +11,7 @@ class UpgradeOption:
     apply: Callable[[object], None]
     icon: str = ""
     tooltip: str = ""
+    grants_weapon: Optional[str] = None
 
 
 class LevelingSystem:
@@ -47,6 +48,12 @@ class LevelingSystem:
 
         def swift_stride(player):
             player.speed *= 1.1
+
+        def unlock_orbitals(player):
+            player.unlock_weapon("orbitals")
+
+        def unlock_cardinal_burst(player):
+            player.unlock_weapon("cardinal")
 
         self.upgrade_pool = [
             UpgradeOption(
@@ -98,6 +105,22 @@ class LevelingSystem:
                 icon="➤",
                 tooltip="Cover ground and dodge threats faster.",
             ),
+            UpgradeOption(
+                "Orbiting Blades",
+                "Summon rotating blades that circle you",
+                unlock_orbitals,
+                icon="🜁",
+                tooltip="Unlock a persistent orbiting weapon.",
+                grants_weapon="orbitals",
+            ),
+            UpgradeOption(
+                "Cardinal Burst",
+                "Fire blasts in four directions",
+                unlock_cardinal_burst,
+                icon="✦",
+                tooltip="Unlock a directional burst weapon.",
+                grants_weapon="cardinal",
+            ),
         ]
 
     def update(self, dt: float):
@@ -132,8 +155,12 @@ class LevelingSystem:
         if not self.upgrade_pool:
             return
 
+        available_options = self._get_available_upgrades()
+        if not available_options:
+            return
+
         choices = random.sample(
-            self.upgrade_pool, k=min(3, len(self.upgrade_pool))
+            available_options, k=min(3, len(available_options))
         )
         self.current_choices = choices
         self.awaiting_choice = True
@@ -195,6 +222,17 @@ class LevelingSystem:
         player = self.engine.player
         while player.xp >= player.xp_to_next_level and not self.awaiting_choice:
             self.level_up()
+
+    def _get_available_upgrades(self) -> List[UpgradeOption]:
+        player = self.engine.player
+        available: List[UpgradeOption] = []
+
+        for option in self.upgrade_pool:
+            if option.grants_weapon and player and player.has_weapon(option.grants_weapon):
+                continue
+            available.append(option)
+
+        return available
 
     def draw(self):
         width, height = self.engine.width, self.engine.height
