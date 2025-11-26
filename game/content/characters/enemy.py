@@ -114,7 +114,7 @@ class ExploderEnemy(Enemy):
             player.take_damage(self.explosion_damage)
             engine.sound_manager.play("hit")
             if player.health <= 0:
-                engine.close()
+                engine.handle_game_over()
 
     def _is_within_explosion(self, sprite) -> bool:
         dx = sprite.center_x - self.center_x

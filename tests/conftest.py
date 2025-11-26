@@ -2,6 +2,11 @@ import os
 import sys
 import types
 
+# Ensure the repository root is importable so game modules can be loaded in tests.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 # Provide a lightweight stub of the arcade module so tests can run without
 # graphical dependencies. Pytest loads this conftest before importing the
 # application modules, ensuring the stub is in place when they are imported.
