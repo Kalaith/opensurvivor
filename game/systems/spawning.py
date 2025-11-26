@@ -70,6 +70,16 @@ class SpawningSystem:
         self.elite_speed_multiplier = 1.15
         self.scaled_elite_chance = 0.0
         self.overwhelm_mode = False
+        # Enemy targeting throttle: keep distant, idle mobs light on CPU while
+        # widening their engagement radius as difficulty rises.
+        self.throttle_config = {
+            "idle_distance": 4.0,  # pixels of movement to be considered active
+            "idle_frame_grace": 8,  # frames tolerated before backing off updates
+            "engage_radius": 220.0,  # always refresh targeting inside this radius
+            "near_radius": 150.0,  # wake up instantly when player returns nearby
+            "distant_update_interval": 0.35,  # seconds between far retargets
+            "minimum_interval": 0.12,
+        }
         self._update_wave_profile(force=True)
 
     def update(self, dt: float):
@@ -188,6 +198,19 @@ class SpawningSystem:
         self.scaled_elite_chance = min(0.8, base_elite_chance + minutes_elapsed * 0.015)
         self.elite_health_multiplier = 2.0 + minutes_elapsed * 1.0
         self.elite_speed_multiplier = 1.15 + minutes_elapsed * 0.035
+
+        # Keep late waves responsive: nudge engagement radius upward and shorten
+        # throttled retarget intervals as swarms grow faster. The minimum
+        # interval prevents runaway CPU use in extreme cases.
+        ramp = min(0.22, minutes_elapsed * 0.04)
+        self.throttle_config["distant_update_interval"] = max(
+            self.throttle_config["minimum_interval"], 0.35 - ramp
+        )
+        self.throttle_config["engage_radius"] = 220.0 + min(60.0, minutes_elapsed * 8)
+        close_interval = self.throttle_config["distant_update_interval"] * 0.6
+        self.throttle_config["close_interval"] = max(
+            self.throttle_config["minimum_interval"], close_interval
+        )
 
     def _scale_enemy(self, enemy: Enemy) -> None:
         """Ramp core stats with survival time to ensure eventual defeat."""
