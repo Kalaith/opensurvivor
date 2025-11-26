@@ -1,35 +1,33 @@
 # Python Game Code Review
 
 ## 1. Executive Summary
-The project delivers a simple arcade-based survival prototype but consolidates most responsibilities inside a single `Engine` class, leaving little separation between loop control, UI, spawning, combat, leveling, and menu/game-over flows. Systems and entities often manipulate global engine state directly. Asset handling, scenes/states, and utilities are minimal, and only a narrow set of unit tests exist. Architectural boundaries, testing depth, and resource management all need significant work to align with the requested guidelines.
+The refactor adds explicit scene classes and progression state, giving the engine clearer hooks for gameplay, menu, and game-over flows. However, systems and entities still reach directly into engine globals, there is no asset manager/config layer, and UI rendering remains tightly coupled to engine data structures. Automated testing covers only a narrow slice (collision bounds, spawning, and a single death flow), leaving combat, leveling, and scene transitions unverified.
 
 ## 2. Critical Issues
-- **Player death bypasses game-over bookkeeping.** `ExploderEnemy.on_death` closes the window when the blast kills the player instead of routing through `Engine.handle_game_over`, skipping survival time recording and cleanup. 【F:game/content/characters/enemy.py†L91-L118】【F:game/core/engine.py†L188-L207】
+_No critical issues identified under the provided guidelines._
 
 ## 3. Major Issues
-- **Engine is a god object with mixed concerns.** `Engine` owns rendering, menu/state transitions, HUD, collision resolution, unlocking, and system orchestration, rather than delegating to scene/state controllers or dedicated systems. This violates the requested separation of concerns and makes reuse/testing difficult. 【F:game/core/engine.py†L11-L207】【F:game/core/engine.py†L324-L359】
-- **Entities and systems tightly couple to engine globals.** Enemies append children directly to `engine.enemies/all_sprites`, play sounds, and close the window; systems mutate `engine` collections in place. This prevents reusing behaviors outside this engine and complicates testing. 【F:game/content/characters/enemy.py†L65-L118】【F:game/systems/combat.py†L13-L110】
-- **No scene/state layer.** Menu, gameplay, and game-over screens are rendered and updated inside `Engine` rather than distinct scene/state objects as requested, limiting extensibility. 【F:game/core/engine.py†L156-L207】【F:game/core/engine.py†L232-L310】
-- **Sparse automated tests.** Only two targeted tests exist; core combat, leveling, input handling, and audio/resource systems lack coverage, leaving regressions undetected. 【F:tests/test_engine_and_spawning.py†L1-L72】
+- **Engine remains a central coordinator for disparate concerns.** Even with scenes, `Engine` still constructs sprite lists, owns progression state, manages UI geometry, and drives system orchestration, making it difficult to reuse systems or run them headlessly. Systems pull from engine collections instead of receiving explicit inputs, preserving the “god object” pattern. 【F:game/core/engine.py†L20-L207】【F:game/scenes/gameplay_scene.py†L22-L78】【F:game/systems/combat.py†L7-L119】
+- **Entities and systems mutate global engine state directly.** Enemy death spawns items and appends to engine lists; combat and spawning systems modify shared sprite lists and play sounds through the engine rather than via injected services, complicating isolation and testing. 【F:game/content/characters/enemy.py†L18-L121】【F:game/systems/combat.py†L50-L118】【F:game/systems/spawning.py†L87-L119】
+- **No dedicated asset/config management.** Sound loading and placeholder generation live inside the engine-owned `SoundManager`, while other resources (e.g., weapon stats, UI layout, wave data) are hardcoded in multiple modules instead of centralized under `assets/` or a config layer, making tuning and reuse harder. 【F:game/core/audio.py†L10-L96】【F:game/core/engine.py†L265-L311】【F:game/systems/spawning.py†L8-L184】
+- **Sparse automated testing for core systems.** Only a few unit tests exist for collision bounds, wave spawning, and an exploder death path; combat resolution, leveling choices, input handling, scene transitions, and progression unlocking lack coverage, risking regressions. 【F:tests/test_engine_and_spawning.py†L18-L170】
 
 ## 4. Minor Issues
-- **HUD/menu rendering does per-frame object creation.** Rebuilding multiple `arcade.Text` objects every frame in menu, HUD, and overlays may allocate unnecessarily; cached text or sprite-based UI would reduce overhead. 【F:game/core/engine.py†L156-L207】【F:game/core/engine.py†L232-L310】
-- **Unlock logic duplicated in multiple places.** Character unlock checks are hardcoded in `_update_unlocks` and menu drawing rather than centralized in a progression system, increasing drift risk. 【F:game/core/engine.py†L335-L360】【F:game/core/engine.py†L232-L282】
-- **Magic numbers throughout.** Timers, speeds, and UI dimensions are scattered literals (e.g., projectile stats, wave timing, UI sizes) instead of configuration/constants, making tuning harder. 【F:game/systems/spawning.py†L6-L84】【F:game/core/engine.py†L85-L118】【F:game/content/characters/player.py†L5-L25】
-- **Inconsistent use of type hints and docstrings.** Several public methods and constructors omit return/parameter hints or explanations (e.g., `SoundManager`, many system methods), reducing readability. 【F:game/core/audio.py†L9-L75】【F:game/systems/combat.py†L6-L110】
+- **UI text objects recreated every frame.** Menu, HUD, and game-over scenes build multiple `arcade.Text` instances on each render instead of caching static labels, causing avoidable allocations. 【F:game/scenes/menu_scene.py†L59-L200】【F:game/scenes/gameplay_scene.py†L95-L169】【F:game/scenes/game_over_scene.py†L47-L100】
+- **Magic numbers and duplicated unlock logic.** Wave timings, UI dimensions, character unlock thresholds, and weapon stats are scattered literals rather than constants or config, and unlock requirements are duplicated in both character definitions and progression checks. 【F:game/core/engine.py†L265-L311】【F:game/systems/spawning.py†L8-L184】【F:game/content/characters/player.py†L5-L35】【F:game/systems/progression.py†L59-L71】
+- **Limited typing and documentation.** Key public methods lack type hints or docstrings (e.g., `SoundManager.load_sounds`, combat system methods), reducing clarity and mypy compatibility. 【F:game/core/audio.py†L10-L96】【F:game/systems/combat.py†L6-L189】
 
 ## 5. Suggestions / Improvements
-- Introduce a formal scene/state layer (`menu`, `gameplay`, `game_over`) to isolate rendering/input/update logic per state and keep `Engine` focused on window/bootstrap responsibilities.
-- Extract collision, UI/HUD drawing, and progression/unlock logic into dedicated systems or managers to reduce engine coupling and improve testability.
-- Define entity behaviors as components (movement, health, attack) to avoid entities mutating engine collections directly; expose system-level events (e.g., death, spawn) instead.
-- Centralize configuration (weapon stats, wave timings, UI layout) in data files or constants under `content/` or `config/` and load via a resource manager.
-- Expand automated tests to cover combat resolution, XP/leveling flows, spawning weights, and death/game-over handling; use dependency injection/mocks to run systems headlessly.
-- Cache UI text/sprites and reuse them rather than recreating `arcade.Text` objects every frame to reduce allocation churn.
+- Introduce a lightweight asset/config layer (e.g., YAML/JSON under `assets/` or `config/`) for weapon stats, wave profiles, and UI layout, loaded through a resource manager and passed to systems.
+- Further decouple systems from `Engine` by passing explicit context objects or component data; prefer events or callbacks for spawn/death rather than direct list mutation.
+- Cache static UI text/sprites inside scenes and update only dynamic values to reduce per-frame allocations.
+- Expand unit tests to cover combat damage resolution, XP/leveling choices, progression unlocking, and scene transitions; inject mock services for sound and input to enable headless runs.
+- Add type hints/docstrings across systems and managers and consider dataclasses for entities’ stat blocks to improve readability and tooling support.
 
 ## 6. Scores
-- **Architecture:** 4 / 10 — Core loop and systems exist but lack modular boundaries and scene/state separation.
-- **Code Quality:** 5 / 10 — Readable naming and small files, but pervasive magic numbers, limited typing, and minimal documentation.
-- **Separation of Concerns:** 3 / 10 — Engine owns nearly all responsibilities; entities and systems are tightly coupled to engine state.
+- **Architecture:** 5 / 10 — Scene separation is in place, but core systems still rely on engine globals and lack asset/config boundaries.
+- **Code Quality:** 6 / 10 — Code is readable and modularized, yet heavy magic numbers, sparse typing, and limited docs remain.
+- **Separation of Concerns:** 5 / 10 — Scenes help, but engine-centric state and system/entity coupling keep concerns intertwined.
 
 ## 7. Overall Recommendation
-Proceed with refactoring before adding features. Establish scene/state architecture, decouple systems from engine/global state, centralize configuration, and add targeted automated tests to stabilize core gameplay behaviors.
+Proceed with further decoupling before expanding features. Introduce configuration-driven systems, reduce engine/global coupling through clearer interfaces, cache UI assets, and broaden automated tests around combat, leveling, and progression flows.
