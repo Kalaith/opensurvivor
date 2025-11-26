@@ -63,6 +63,7 @@ class SpawningSystem:
         self.current_profile = None
         self.spawn_rate = 2.0
         self.max_enemies = 40
+        self.min_enemies = 5
         self.wave_notification_timer = 0.0
         self.wave_message = ""
         self.elite_health_multiplier = 2.0
@@ -74,6 +75,11 @@ class SpawningSystem:
     def update(self, dt: float):
         self._update_wave_profile()
         self.wave_notification_timer = max(0.0, self.wave_notification_timer - dt)
+
+        desired_count = self._desired_enemy_count()
+        if len(self.engine.enemies) < desired_count:
+            self._spawn_to_target(desired_count)
+            return
 
         if len(self.engine.enemies) >= self.max_enemies:
             self.spawn_timer = 0.0
@@ -170,7 +176,8 @@ class SpawningSystem:
         self.spawn_rate = max(0.05, base_spawn_rate * spawn_rate_multiplier)
 
         base_max = self.current_profile.get("max_enemies", self.max_enemies)
-        self.max_enemies = base_max + int(minutes_elapsed * 15)
+        self.max_enemies = base_max + int(minutes_elapsed * 25)
+        self.max_enemies = max(self.max_enemies, self.min_enemies)
 
         if self.overwhelm_mode:
             self.max_enemies = max(self.max_enemies, 150)
@@ -188,10 +195,26 @@ class SpawningSystem:
         minutes_elapsed = max(0.0, (elapsed - 30.0) / 60.0)
 
         health_multiplier = 1.0 + minutes_elapsed * 2.3
-        speed_multiplier = 1.0 + minutes_elapsed * 0.08
+        speed_multiplier = 1.0 + minutes_elapsed * 0.05
         damage_multiplier = 1.0 + minutes_elapsed * 3.0
 
         enemy.health = max(1, int(enemy.health * health_multiplier))
         enemy.speed *= speed_multiplier
         if hasattr(enemy, "damage"):
             enemy.damage = int(enemy.damage * damage_multiplier)
+
+    def _desired_enemy_count(self) -> int:
+        """Target enemy population ramps from a small crowd to swarms."""
+        elapsed = getattr(self.engine, "elapsed_time", 0.0)
+        minutes_elapsed = elapsed / 60.0
+        target = self.min_enemies + int(minutes_elapsed * 22)
+        return min(self.max_enemies, target)
+
+    def _spawn_to_target(self, desired_count: int) -> None:
+        """Burst spawn enemies to reach the intended on-screen presence."""
+        missing = max(0, min(self.max_enemies, desired_count) - len(self.engine.enemies))
+        # Avoid extreme single-frame spikes while still filling the arena quickly.
+        batch = min(missing, 12)
+        for _ in range(batch):
+            self.spawn_enemy()
+        self.spawn_timer = self.spawn_rate
