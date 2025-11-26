@@ -26,6 +26,15 @@ class Player(Entity):
         self.regen_cooldown = 2.0  # Delay after taking damage before regen resumes
         self._regen_timer = 0.0
 
+        # Weapons
+        self.unlocked_weapons = {"projectile"}
+
+    def unlock_weapon(self, weapon_name: str):
+        self.unlocked_weapons.add(weapon_name)
+
+    def has_weapon(self, weapon_name: str) -> bool:
+        return weapon_name in self.unlocked_weapons
+
     def take_damage(self, amount: int):
         """Reduce health and reset regen timer."""
         self.health = max(0, self.health - amount)
