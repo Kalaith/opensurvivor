@@ -8,7 +8,7 @@ class SpawningSystem:
         self.wave_profiles = [
             {
                 "start": 0,
-                "spawn_rate": 2.0,
+                "spawn_rate": 2.5,
                 "weights": [
                     (Enemy, 0.7),
                     (SplittingEnemy, 0.15),
@@ -16,12 +16,12 @@ class SpawningSystem:
                     (ExploderEnemy, 0.05),
                 ],
                 "elite_chance": 0.0,
-                "max_enemies": 25,
+                "max_enemies": 20,
                 "label": "Warm-up",
             },
             {
                 "start": 60,
-                "spawn_rate": 1.5,
+                "spawn_rate": 1.65,
                 "weights": [
                     (Enemy, 0.55),
                     (SplittingEnemy, 0.2),
@@ -34,7 +34,7 @@ class SpawningSystem:
             },
             {
                 "start": 120,
-                "spawn_rate": 1.1,
+                "spawn_rate": 1.25,
                 "weights": [
                     (Enemy, 0.4),
                     (SplittingEnemy, 0.28),
@@ -47,7 +47,7 @@ class SpawningSystem:
             },
             {
                 "start": 180,
-                "spawn_rate": 0.9,
+                "spawn_rate": 1.05,
                 "weights": [
                     (Enemy, 0.35),
                     (SplittingEnemy, 0.27),
@@ -68,6 +68,7 @@ class SpawningSystem:
         self.elite_health_multiplier = 2.0
         self.elite_speed_multiplier = 1.15
         self.scaled_elite_chance = 0.0
+        self.overwhelm_mode = False
         self._update_wave_profile(force=True)
 
     def update(self, dt: float):
@@ -165,26 +166,30 @@ class SpawningSystem:
 
         base_spawn_rate = self.current_profile["spawn_rate"]
         # Shrink spawn intervals exponentially so late-game floods the arena.
-        spawn_rate_multiplier = 0.85 ** minutes_elapsed
+        spawn_rate_multiplier = 0.9 ** minutes_elapsed
         self.spawn_rate = max(0.05, base_spawn_rate * spawn_rate_multiplier)
 
         base_max = self.current_profile.get("max_enemies", self.max_enemies)
-        self.max_enemies = base_max + int(minutes_elapsed * 20)
+        self.max_enemies = base_max + int(minutes_elapsed * 15)
+
+        if self.overwhelm_mode:
+            self.max_enemies = max(self.max_enemies, 150)
+            self.spawn_rate = min(self.spawn_rate, 0.25)
 
         # Make elites both more common and vastly stronger over time.
         base_elite_chance = self.current_profile.get("elite_chance", 0.0)
-        self.scaled_elite_chance = min(0.95, base_elite_chance + minutes_elapsed * 0.02)
-        self.elite_health_multiplier = 2.0 + minutes_elapsed * 1.5
-        self.elite_speed_multiplier = 1.15 + minutes_elapsed * 0.05
+        self.scaled_elite_chance = min(0.8, base_elite_chance + minutes_elapsed * 0.015)
+        self.elite_health_multiplier = 2.0 + minutes_elapsed * 1.0
+        self.elite_speed_multiplier = 1.15 + minutes_elapsed * 0.035
 
     def _scale_enemy(self, enemy: Enemy) -> None:
         """Ramp core stats with survival time to ensure eventual defeat."""
         elapsed = getattr(self.engine, "elapsed_time", 0.0)
-        minutes_elapsed = elapsed / 60.0
+        minutes_elapsed = max(0.0, (elapsed - 30.0) / 60.0)
 
-        health_multiplier = 1.0 + minutes_elapsed * 3.0
-        speed_multiplier = 1.0 + minutes_elapsed * 0.12
-        damage_multiplier = 1.0 + minutes_elapsed * 4.0
+        health_multiplier = 1.0 + minutes_elapsed * 2.3
+        speed_multiplier = 1.0 + minutes_elapsed * 0.08
+        damage_multiplier = 1.0 + minutes_elapsed * 3.0
 
         enemy.health = max(1, int(enemy.health * health_multiplier))
         enemy.speed *= speed_multiplier

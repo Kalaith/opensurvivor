@@ -20,6 +20,9 @@ class Player(Entity):
         self.projectile_pierce = 1
         self.attack_speed_multiplier = 1.0
 
+        # Survivability
+        self.invincible = False
+        
         # Health
         self.max_health = 100
         self.health = self.max_health
@@ -38,6 +41,8 @@ class Player(Entity):
 
     def take_damage(self, amount: int):
         """Reduce health and reset regen timer."""
+        if self.invincible:
+            return
         self.health = max(0, self.health - amount)
         self._regen_timer = self.regen_cooldown
 
