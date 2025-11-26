@@ -36,18 +36,8 @@ class GameplayScene(BaseScene):
         self.engine.combat_system.update(delta_time)
         self.engine.leveling_system.update(delta_time)
 
-        movers = []
-        if self.engine.player:
-            movers.append(self.engine.player)
-        movers.extend(self.engine.enemies)
-        previous_positions = [
-            (sprite.center_x, sprite.center_y) for sprite in movers
-        ]
-
-        self.engine.all_sprites.update()
-
-        for sprite, previous_pos in zip(movers, previous_positions):
-            self._apply_bounds_and_collisions(sprite, previous_pos)
+        if self.engine.collision_system:
+            self.engine.collision_system.update(self.engine, delta_time)
 
     def render(self) -> None:
         self._draw_map_background()
@@ -85,32 +75,6 @@ class GameplayScene(BaseScene):
     def handle_mouse_press(self, x: float, y: float, button, modifiers) -> None:
         if self.engine.leveling_system.handle_mouse_press(x, y, button, modifiers):
             return
-
-    def _apply_bounds_and_collisions(self, sprite: arcade.Sprite, previous_pos):
-        if previous_pos is None:
-            return
-
-        collided = False
-        if sprite is self.engine.player and self.engine.obstacles:
-            collided = bool(arcade.check_for_collision_with_list(sprite, self.engine.obstacles))
-        if collided:
-            sprite.center_x, sprite.center_y = previous_pos
-            sprite.change_x = 0
-            sprite.change_y = 0
-
-        self._clamp_to_map(sprite)
-
-    def _clamp_to_map(self, sprite: arcade.Sprite) -> None:
-        half_w = sprite.width / 2
-        half_h = sprite.height / 2
-        clamped_x = min(max(sprite.center_x, half_w), self.engine.map.width - half_w)
-        clamped_y = min(max(sprite.center_y, half_h), self.engine.map.height - half_h)
-
-        if clamped_x != sprite.center_x or clamped_y != sprite.center_y:
-            sprite.center_x = clamped_x
-            sprite.center_y = clamped_y
-            sprite.change_x = 0
-            sprite.change_y = 0
 
     def _draw_map_background(self) -> None:
         arcade.draw_lrbt_rectangle_filled(

@@ -1,6 +1,7 @@
 import arcade
 from ..content.weapons.projectile import CardinalProjectile, OrbitingProjectile, Projectile
 from ..content.items.experience import ExperienceOrb
+from ..content.characters.enemy import ExploderEnemy
 
 class CombatSystem:
     def __init__(self, engine):
@@ -104,7 +105,8 @@ class CombatSystem:
                 damage = getattr(enemy, "damage", 1)
                 player.take_damage(damage)
                 self.engine.sound_manager.play("hit")
-                enemies_to_remove.append(enemy)
+                if isinstance(enemy, ExploderEnemy):
+                    enemies_to_remove.append(enemy)
 
                 if player.health <= 0:
                     print("Player defeated!")
