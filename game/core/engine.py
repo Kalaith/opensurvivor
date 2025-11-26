@@ -67,6 +67,9 @@ class Engine(arcade.Window):
         self.return_button = {"x": self.width / 2, "y": 120, "w": 240, "h": 50}
         self._setup_characters()
 
+        # Default to the first unlocked hero so the menu can render immediately.
+        self.selected_character = next(iter(self.unlocked_characters), "square")
+
         self.progression_system = ProgressionSystem(self.characters)
 
         # Systems are created when a run begins so they always start fresh.
