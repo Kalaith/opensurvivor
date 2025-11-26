@@ -114,6 +114,10 @@ class _QuadNode:
 class CollisionSystem:
     """Handle collision resolution and boundary enforcement for movable sprites."""
 
+    # Limit the number of neighbor interactions per enemy to avoid quadratic blow-up
+    # when hundreds of bodies pile onto the player.
+    _MAX_NEIGHBORS = 12
+
     def update(self, world, _dt: float) -> None:
         """Apply pending movements and resolve collisions within the world.
 
@@ -187,6 +191,9 @@ class CollisionSystem:
             search_radius = (radii[enemy] + max_radius) * 1.2
             candidates = self._query_quadtree(quad_root, enemy, search_radius)
 
+            if len(candidates) > self._MAX_NEIGHBORS:
+                candidates = self._closest_neighbors(enemy, candidates)
+
             for other in candidates:
                 if enemy is other or id(enemy) >= id(other):
                     continue
@@ -222,6 +229,21 @@ class CollisionSystem:
                 enemy, "collision_radius", min(enemy.width, enemy.height) * 0.5
             )
         return radii
+
+    def _closest_neighbors(self, sprite, candidates):
+        """Return only the nearest candidates to reduce pair resolution cost."""
+
+        distances = []
+        sx, sy = sprite.center_x, sprite.center_y
+        for other in candidates:
+            dx = other.center_x - sx
+            dy = other.center_y - sy
+            # Use squared distance to avoid sqrt until separation time.
+            distances.append((dx * dx + dy * dy, other))
+
+        distances.sort(key=lambda item: item[0])
+        limited = [item[1] for item in distances[: self._MAX_NEIGHBORS]]
+        return limited
 
     def _separate_enemies(self, a, b, radii=None) -> bool:
         radius_a = (radii or {}).get(
