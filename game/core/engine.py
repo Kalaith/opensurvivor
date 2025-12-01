@@ -54,7 +54,7 @@ class Engine(arcade.Window):
         self.sound_manager.load_sounds()
 
         self.all_sprites = arcade.SpriteList()
-        self.enemies = arcade.SpriteList()
+        self.enemies = arcade.SpriteList(use_spatial_hash=True)
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
         self.obstacles = self.map.obstacles
@@ -164,7 +164,7 @@ class Engine(arcade.Window):
 
     def _reset_run_state(self, character_key: str) -> None:
         self.all_sprites = arcade.SpriteList()
-        self.enemies = arcade.SpriteList()
+        self.enemies = arcade.SpriteList(use_spatial_hash=True)
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
         self.paused = False
@@ -193,7 +193,7 @@ class Engine(arcade.Window):
 
         # Clear active sprites so the next run starts fresh
         self.all_sprites = arcade.SpriteList()
-        self.enemies = arcade.SpriteList()
+        self.enemies = arcade.SpriteList(use_spatial_hash=True)
         self.projectiles = arcade.SpriteList()
         self.items = arcade.SpriteList()
         self.player = None

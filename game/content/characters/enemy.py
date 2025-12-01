@@ -48,12 +48,31 @@ class Enemy(Entity):
             self.change_x = dx * self.speed * dt
             self.change_y = dy * self.speed * dt
 
+    def reset(self):
+        """Reset enemy state for reuse from object pool."""
+        self.target = None
+        self.health = 1
+        self.idle_frames = 0
+        self.last_pos = (self.center_x, self.center_y)
+        self.target_cooldown = 0.0
+        self.change_x = 0
+        self.change_y = 0
+        # Reset any elite modifiers
+        if hasattr(self, 'is_elite'):
+            self.is_elite = False
+
 
 class ArmoredEnemy(Enemy):
     """A sturdier enemy that takes multiple hits."""
 
     def __init__(self, x: float, y: float):
         super().__init__(x, y, 28, 28, (50, 100, 255))
+        self.health = 3
+        self.speed = 60.0
+
+    def reset(self):
+        """Reset armored enemy state."""
+        super().reset()
         self.health = 3
         self.speed = 60.0
 
@@ -80,6 +99,13 @@ class SplittingEnemy(Enemy):
             child.target = self.target
             engine.enemies.append(child)
             engine.all_sprites.append(child)
+
+    def reset(self):
+        """Reset splitting enemy state."""
+        super().reset()
+        self.generation = 0
+        self.health = 1
+        self.speed = 90.0
 
 
 class ExploderEnemy(Enemy):
@@ -127,3 +153,11 @@ class ExploderEnemy(Enemy):
         dx = sprite.center_x - self.center_x
         dy = sprite.center_y - self.center_y
         return dx * dx + dy * dy <= self.explosion_radius * self.explosion_radius
+
+    def reset(self):
+        """Reset exploder enemy state."""
+        super().reset()
+        self.health = 2
+        self.speed = 70.0
+        self.explosion_radius = 80
+        self.explosion_damage = 1

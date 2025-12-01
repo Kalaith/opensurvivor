@@ -1,10 +1,19 @@
 import random
 from ..content.characters.enemy import Enemy, ArmoredEnemy, ExploderEnemy, SplittingEnemy
+from ..core.object_pool import SpriteObjectPool
 
 class SpawningSystem:
     def __init__(self, engine):
         self.engine = engine
         self.spawn_timer = 0.0
+        
+        # Object pools for enemies to reduce allocations
+        self.enemy_pools = {
+            Enemy: SpriteObjectPool(Enemy, initial_size=20, max_size=500),
+            ArmoredEnemy: SpriteObjectPool(ArmoredEnemy, initial_size=10, max_size=200),
+            ExploderEnemy: SpriteObjectPool(ExploderEnemy, initial_size=5, max_size=100),
+            SplittingEnemy: SpriteObjectPool(SplittingEnemy, initial_size=10, max_size=200),
+        }
         self.wave_profiles = [
             {
                 "start": 0,
@@ -76,10 +85,10 @@ class SpawningSystem:
         self.throttle_config = {
             "idle_distance": 4.0,  # pixels of movement to be considered active
             "idle_frame_grace": 8,  # frames tolerated before backing off updates
-            "engage_radius": 220.0,  # always refresh targeting inside this radius
-            "near_radius": 150.0,  # wake up instantly when player returns nearby
+            "engage_radius": 300.0,  # always refresh targeting inside this radius
+            "near_radius": 200.0,  # wake up instantly when player returns nearby
             "distant_update_interval": 0.35,  # seconds between far retargets
-            "minimum_interval": 0.12,
+            "minimum_interval": 0.2,
         }
         self._update_wave_profile(force=True)
 
@@ -121,12 +130,21 @@ class SpawningSystem:
         
         enemy_class = self._select_enemy_class()
 
-        enemy = enemy_class(x, y)
+        # Get enemy from pool instead of creating new one
+        if enemy_class in self.enemy_pools:
+            enemy = self.enemy_pools[enemy_class].get_and_add_to_lists(
+                [self.engine.enemies, self.engine.all_sprites], 
+                x, y
+            )
+        else:
+            # Fallback for testing or unknown enemy types
+            enemy = enemy_class(x, y)
+            self.engine.enemies.append(enemy)
+            self.engine.all_sprites.append(enemy)
+        
         enemy.target = self.engine.player
         self._scale_enemy(enemy)
         self._apply_elite_modifiers(enemy)
-        self.engine.enemies.append(enemy)
-        self.engine.all_sprites.append(enemy)
 
     def _select_enemy_class(self):
         if not self.current_profile:
@@ -208,7 +226,7 @@ class SpawningSystem:
         self.throttle_config["distant_update_interval"] = max(
             self.throttle_config["minimum_interval"], 0.35 - ramp
         )
-        self.throttle_config["engage_radius"] = 220.0 + min(60.0, minutes_elapsed * 8)
+        self.throttle_config["engage_radius"] = 300.0 + min(100.0, minutes_elapsed * 10)
         close_interval = self.throttle_config["distant_update_interval"] * 0.6
         self.throttle_config["close_interval"] = max(
             self.throttle_config["minimum_interval"], close_interval

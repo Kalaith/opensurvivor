@@ -28,12 +28,18 @@ class Projectile(Entity):
 
     def update_projectile(self, dt: float):
         self.lifetime -= dt
-        if self.lifetime <= 0:
-            self.remove_from_sprite_lists()
+        # Don't remove from sprite lists here - let the pool system handle it
 
         # Set velocity with delta_time for smooth movement
         self.change_x = self.vx * dt
         self.change_y = self.vy * dt
+
+    def reset(self):
+        """Reset projectile state for reuse from object pool."""
+        self.lifetime = 2.0  # Default lifetime
+        self.pierce = 1      # Default pierce
+        self.change_x = 0
+        self.change_y = 0
 
 class CardinalProjectile(Projectile):
     """Projectile that travels in a fixed cardinal direction."""
@@ -82,7 +88,7 @@ class OrbitingProjectile(Entity):
     def update_projectile(self, dt: float):
         self.lifetime -= dt
         if self.lifetime <= 0 or not self.player:
-            self.remove_from_sprite_lists()
+            # Don't remove from sprite lists here - let the pool system handle it
             return
 
         self.angle = (self.angle + self.angular_speed * dt) % 360
@@ -94,3 +100,11 @@ class OrbitingProjectile(Entity):
         # Move towards the target orbit position each frame
         self.change_x = target_x - self.center_x
         self.change_y = target_y - self.center_y
+
+    def reset(self):
+        """Reset orbiting projectile state for reuse from object pool."""
+        self.lifetime = 4.0
+        self.angle = 0
+        self.player = None
+        self.change_x = 0
+        self.change_y = 0
